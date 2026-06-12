@@ -199,20 +199,18 @@ function extractOrigin(url: string): string {
   }
 }
 
-function getFormAction($: cheerio.CheerioAPI, fallbackUrl: string, link: string): string {
+function getFormAction($: cheerio.CheerioAPI, fallbackUrl: string): string {
   const action = $('form').first().attr('action')
 
   if (!action) return fallbackUrl
 
-  if (action.startsWith('http://') || action.startsWith('https://')) {
-    return action
+  // Resolve absolute URLs, absolute paths, and relative paths against the
+  // login page URL — handles SSO-bypass URLs that include a query string.
+  try {
+    return new URL(action, fallbackUrl).toString()
+  } catch {
+    return fallbackUrl
   }
-
-  if (action.startsWith('/')) {
-    return `${link.replace(/\/$/, '')}${action}`
-  }
-
-  return `${link}${action}`
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
@@ -245,7 +243,13 @@ export async function loginHAC(
     )
   }
 
-  const loginPageUrl = `${link}HomeAccess/Account/LogOn`
+  // If the user pasted the full SSO-bypass login URL (e.g. Katy ISD's
+  // .../HomeAccess/Account/LogOn?ReturnUrl=...), use it exactly as given so
+  // HAC shows the direct username/password form. Otherwise build the
+  // standard login URL from the base.
+  const loginPageUrl = /Account\/Log[Oo]n/.test(baseUrl)
+    ? baseUrl.trim()
+    : `${link}HomeAccess/Account/LogOn`
 
   let loginPageHtml: string
 
@@ -322,7 +326,7 @@ export async function loginHAC(
 
   console.log('[HAC CLIENT] Login form fields:', Array.from(formData.keys()))
 
-  const loginPostUrl = getFormAction($, loginPageUrl, link)
+  const loginPostUrl = getFormAction($, loginPageUrl)
 
   try {
     console.log('[HAC CLIENT] Posting HAC login form:', loginPostUrl)
@@ -330,7 +334,7 @@ export async function loginHAC(
     const postRes = await http.post(loginPostUrl, formData.toString(), {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        Origin: link.replace(/\/$/, ''),
+        Origin: origin.replace(/\/$/, ''),
         Referer: loginPageUrl,
         Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
@@ -377,10 +381,11 @@ export async function loginHAC(
     }
 
     // Always verify session by navigating to a protected page.
-    // This catches cases where HAC redirects to an error page (not the login page)
-    // instead of throwing an explicit credential rejection.
-    const homeUrl = `${origin}HomeAccess/Home.aspx`
-    console.log('[HAC CLIENT] Verifying session via Home.aspx:', homeUrl)
+    // Use the Demographic page — the normal authenticated landing page on
+    // new PowerSchool HAC. (Home.aspx no longer exists and redirects to /Error,
+    // which previously caused false "invalid credentials" failures.)
+    const homeUrl = `${origin}HomeAccess/Registration/Demographic`
+    console.log('[HAC CLIENT] Verifying session via Demographic page:', homeUrl)
 
     const homeRes = await http.get(homeUrl, {
       headers: { Referer: loginPostUrl },
@@ -391,7 +396,7 @@ export async function loginHAC(
     const homeFinalUrl: string =
       (homeRes.request as { res?: { responseUrl?: string } })?.res?.responseUrl ?? homeUrl
 
-    console.log('[HAC CLIENT] Home.aspx response', {
+    console.log('[HAC CLIENT] Demographic verification response', {
       status: homeRes.status,
       finalUrl: homeFinalUrl,
       htmlLength: typeof homeBody === 'string' ? homeBody.length : 0,
@@ -405,13 +410,12 @@ export async function loginHAC(
       throw new Error('Invalid credentials — HAC rejected the username or password')
     }
 
-    // Catch redirect to error page (e.g., SSO/MFA failure, expired session)
-    const homeRedirectedToError =
-      homeFinalUrl.includes('/Error') &&
-      !homeFinalUrl.includes('Home.aspx')
-
-    if (homeRedirectedToError) {
-      throw new Error('Invalid credentials — HAC authentication failed (session not established; district may require SSO/MFA)')
+    // A redirect to an error page is NOT proof of bad credentials (e.g. a
+    // nonexistent page redirects to /Error even when authenticated). Only a
+    // redirect back to the login page means the session was rejected — log
+    // and let the cookie check below make the final call.
+    if (homeFinalUrl.includes('/Error')) {
+      console.warn('[HAC CLIENT] Verification page redirected to /Error — continuing; auth cookie check will decide')
     }
 
     // Content-based check: if Home.aspx still contains a login form, credentials failed.
