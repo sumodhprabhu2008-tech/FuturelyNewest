@@ -183,6 +183,22 @@ function normalizeBaseUrl(url: string): string {
   return url.endsWith('/') ? url : `${url}/`
 }
 
+/**
+ * Extract just the protocol + hostname from any URL.
+ * Used for building scraping URLs — never for the login URL itself.
+ * Example: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn?...'
+ *       → 'https://homeaccess.katyisd.org/'
+ */
+function extractOrigin(url: string): string {
+  try {
+    const parsed = new URL(url.trim())
+    return `${parsed.protocol}//${parsed.host}/`
+  } catch {
+    const match = url.trim().match(/^(https?:\/\/[^/?#]+)/)
+    return match ? `${match[1]}/` : url
+  }
+}
+
 function getFormAction($: cheerio.CheerioAPI, fallbackUrl: string, link: string): string {
   const action = $('form').first().attr('action')
 
@@ -209,11 +225,13 @@ export async function loginHAC(
   clsessionCookie?: string,
 ): Promise<string> {
   const link = normalizeBaseUrl(baseUrl)
+  const origin = extractOrigin(baseUrl) // e.g. https://homeaccess.katyisd.org/
   const { jar, http } = makeAxiosSession()
 
   console.log('[HAC CLIENT] loginHAC started', {
     baseUrl,
     link,
+    origin,
     userId,
     usernameExists: Boolean(username),
     passwordExists: Boolean(password),
@@ -361,7 +379,7 @@ export async function loginHAC(
     // Always verify session by navigating to a protected page.
     // This catches cases where HAC redirects to an error page (not the login page)
     // instead of throwing an explicit credential rejection.
-    const homeUrl = `${link}HomeAccess/Home.aspx`
+    const homeUrl = `${origin}HomeAccess/Home.aspx`
     console.log('[HAC CLIENT] Verifying session via Home.aspx:', homeUrl)
 
     const homeRes = await http.get(homeUrl, {
@@ -409,6 +427,10 @@ export async function loginHAC(
         throw new Error('Invalid credentials — login form still present after authentication attempt')
       }
     }
+
+    // Do NOT throw for the Demographic page — it is the normal authenticated
+    // landing page for Katy ISD HAC after login.
+    console.log('[HAC CLIENT] Login verified — landed on:', homeFinalUrl, '(Demographic page is normal)')
   } catch (err: unknown) {
     // Re-throw credential errors before the outer handler swallows them
     if (err instanceof Error && err.message.includes('Invalid credentials')) {
@@ -420,9 +442,9 @@ export async function loginHAC(
     throwDetailedAxiosError('submit login form', err)
   }
 
-  const hacDomain = link.replace(/\/$/, '')
+  const hacDomain = origin.replace(/\/$/, '')
   const allCookies = jar.getCookiesSync(hacDomain)
-  console.log('[HAC CLIENT] Saving session — baseUrl (with slash):', link)
+  console.log('[HAC CLIENT] Saving session — baseUrl (clean origin):', origin)
   console.log('[HAC CLIENT] Saving session — cookie lookup domain (no slash):', hacDomain)
   console.log('[HAC CLIENT] Saving session with cookies:', allCookies.map(c => ({ key: c.key, domain: c.domain })))
 
@@ -444,7 +466,9 @@ export async function loginHAC(
     // home.aspx verification already confirmed authentication succeeded
   }
 
-  const sessionToken = saveSession(userId, 'HAC', link, serializeJar(jar))
+  // Save the CLEAN ORIGIN as the baseUrl — all scraping functions build their
+  // URLs from this. The full SSO-bypass URL is only used for the login itself.
+  const sessionToken = saveSession(userId, 'HAC', origin, serializeJar(jar))
 
   console.log('[HAC CLIENT] HAC session saved', {
     userId,
@@ -506,234 +530,185 @@ function extractAverage($el: cheerio.Cheerio<AnyNode>, $: cheerio.CheerioAPI): s
 
 export async function getGrades(sessionToken: string): Promise<HACClass[]> {
   const stored = getSessionByToken(sessionToken)
-  if (!stored) throw new Error('School session expired or not found — please log in again')
+  if (!stored) throw new Error('School session expired — please log in again')
 
-  const { http, jar } = restoreSession(stored)
-  const link = stored.baseUrl
+  const { http } = restoreSession(stored)
+  const origin = stored.baseUrl // already cleaned to https://hostname/
 
-  // Log cookies before fetch to verify session is being carried
-  const cookieDomain = link.replace(/\/$/, '')
-  const cookiesBeforeFetch = jar.getCookiesSync(cookieDomain)
-  console.log('[HAC CLIENT] Cookies in jar before grades fetch:', cookiesBeforeFetch.map(c => c.key))
-  console.log('[HAC CLIENT] Cookie count:', cookiesBeforeFetch.length)
-  console.log('[HAC CLIENT] baseUrl from session (with slash):', link)
-  console.log('[HAC CLIENT] Domain for cookie lookup (no slash):', cookieDomain)
+  // The correct URL for grades and classwork in PowerSchool HAC
+  const classworkUrl = `${origin}HomeAccess/Classes/Classwork`
+
+  console.log('[HAC CLIENT] Fetching classwork from:', classworkUrl)
 
   await sleep(800 + Math.random() * 400) // 0.8–1.2s delay
-  const res = await http.get(`${link}HomeAccess/Content/Student/Assignments.aspx`, {
+  const res = await http.get(classworkUrl, {
     headers: {
-      Referer: `${link}HomeAccess/Home.aspx`,
+      Referer: `${origin}HomeAccess/Home.aspx`,
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.9',
       'Upgrade-Insecure-Requests': '1',
     },
   })
 
-  // DEBUG: save raw HTML so we can inspect selectors
-  const debugHtml = res.data as string
-  fs.writeFileSync('hac_debug_grades.html', debugHtml, 'utf8')
-  console.log('[HAC DEBUG] Saved grades page HTML to hac_debug_grades.html')
-  console.log('[HAC DEBUG] HTML length:', debugHtml.length)
-  console.log('[HAC DEBUG] Has .AssignmentClass:', debugHtml.includes('AssignmentClass'))
-  console.log('[HAC DEBUG] Has .sg-header:', debugHtml.includes('sg-header'))
-  console.log('[HAC DEBUG] Has classBlock:', debugHtml.includes('classBlock'))
-  console.log('[HAC DEBUG] Has sg-content-grid:', debugHtml.includes('sg-content-grid'))
-  console.log('[HAC DEBUG] HTML preview:\n', debugHtml.slice(0, 3000))
+  const finalUrl = (res.request as { res?: { responseUrl?: string } })?.res?.responseUrl ?? ''
+  const pageTitle = ('' + res.data).match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? ''
+
+  console.log('[HAC CLIENT] Classwork page:', { finalUrl, pageTitle, htmlLength: (res.data as string).length })
+
+  // If redirected to login, session expired
+  if (finalUrl.includes('Account/LogOn') || finalUrl.includes('Account/Login')) {
+    throw new Error('School session expired — please log in again')
+  }
 
   const $ = cheerio.load(res.data as string)
 
-  // Log final URL and page title — detect if we were redirected away from Assignments
-  const finalUrl = (res.request as { res?: { responseUrl?: string } })?.res?.responseUrl ?? 'unknown'
-  console.log('[HAC CLIENT] Grades page final URL:', finalUrl)
-  console.log('[HAC CLIENT] Grades page title:', $('title').text().trim())
-  console.log('[HAC CLIENT] Grades page HTML length:', typeof res.data === 'string' ? res.data.length : 0)
+  // Save raw HTML for debugging
+  try {
+    fs.writeFileSync('hac_classwork_debug.html', res.data as string, 'utf8')
+    console.log('[HAC CLIENT] Saved classwork HTML to hac_classwork_debug.html')
+  } catch { /* ignore */ }
 
-  if (!finalUrl.includes('Assignments') && $('title').text().trim() !== 'Assignments') {
-    console.error('[HAC CLIENT] Redirected away from Assignments page — session likely expired or cookie domain mismatch')
-    throw new Error('School session expired — please disconnect and reconnect your school portal')
-  }
-
-  const pageTitle = $('title').text().trim()
-  const hasAssignmentClass = $('.AssignmentClass').length
-  const hasSgHeader = $('.sg-header').length
-
-  console.log('[HAC CLIENT] getGrades page structure:', {
-    pageTitle,
-    hasAssignmentClass,
-    hasSgHeader,
-    htmlLength: typeof res.data === 'string' ? res.data.length : 0,
+  // Log page structure to understand the HTML
+  console.log('[HAC CLIENT] Classwork page structure check:', {
+    hasAssignmentClass: $('.AssignmentClass').length,
+    hasSgHeader: $('.sg-header').length,
+    hasClassBlock: $('[class*="classBlock"]').length,
+    hasAssignmentGrid: $('[id*="AssignmentGrid"]').length,
+    hasRptAssig: $('[id*="rptAssig"]').length,
+    hasClassGrade: $('[class*="ClassGrade"]').length,
+    tableCount: $('table').length,
+    divCount: $('div[class]').length,
   })
-
-  if (hasAssignmentClass === 0) {
-    console.warn('[HAC CLIENT] No .AssignmentClass elements found. Page may use different selectors.')
-    console.warn('[HAC CLIENT] Page title:', pageTitle)
-  }
 
   const classes: HACClass[] = []
 
-  $('.AssignmentClass').each((_i, el) => {
-    const header = $(el).find('.sg-header .sg-header-heading').text().trim()
-
-    // Robust course name parsing — strip period indicators from end
-    const name = header
-      .replace(/\s*[-–]\s*Period\s*\d+.*$/i, '')
-      .replace(/\s*[-–]\s*Pd\.?\s*\d+.*$/i, '')
-      .replace(/\s*\(\d+\)\s*$/, '')
-      .trim() || header.trim()
-
-    const period = extractPeriod($(el), $)
-    const average = extractAverage($(el), $)
-
-    // Extract column headers to determine cell positions dynamically
-    const colHeaders: string[] = []
-    $(el).find('tr.sg-asp-table-header-row th, thead th').each((_i2, th) => {
-      colHeaders.push($(th).text().trim().toLowerCase())
-    })
-
-    console.log('[HAC CLIENT] Assignment table headers for', name, ':', colHeaders)
-
-    // Helper to find cell index by header keyword
-    const colIdx = (keywords: string[]): number => {
-      for (const kw of keywords) {
-        const idx = colHeaders.findIndex(h => h.includes(kw))
-        if (idx !== -1) return idx
-      }
-      return -1
-    }
-
-    const nameIdx  = colIdx(['assignment', 'name', 'description', 'title'])
-    const dateIdx  = colIdx(['due', 'date'])
-    const catIdx   = colIdx(['category', 'type'])
-    const scoreIdx = colIdx(['score', 'points earned', 'earned'])
-    const totalIdx = colIdx(['total', 'out of', 'possible'])
-    const pctIdx   = colIdx(['%', 'percent', 'average'])
-
-    const scores: HACScore[] = []
-
-    $(el)
-      .find('tr.sg-asp-table-data-row')
-      .each((_j, row) => {
-        const cells = $(row).find('td')
-
-        // Fallback to hardcoded indices if header detection failed
-        const aName     = nameIdx  >= 0 ? cells.eq(nameIdx).text().trim()  : cells.eq(0).text().trim()
-        const dateDue   = dateIdx  >= 0 ? cells.eq(dateIdx).text().trim()  : cells.eq(1).text().trim()
-        const category  = catIdx   >= 0 ? cells.eq(catIdx).text().trim()   : cells.eq(3).text().trim()
-        const scoreRaw  = scoreIdx >= 0 ? cells.eq(scoreIdx).text().trim() : cells.eq(5).text().trim()
-        const totalRaw  = totalIdx >= 0 ? cells.eq(totalIdx).text().trim() : cells.eq(6).text().trim()
-        const pctRaw    = pctIdx   >= 0 ? cells.eq(pctIdx).text().trim()   : cells.eq(7).text().trim()
-
-        const score = parseFloat(scoreRaw) || null
-        const totalPoints = parseFloat(totalRaw) || null
-
-        if (aName) {
-          scores.push({ name: aName, category, score, totalPoints, percentage: pctRaw, dateDue })
-        }
-      })
-
-    if (name) {
-      classes.push({
-        name,
-        period,
-        teacher: '',
-        room: '',
-        average,
-        scores,
-      })
-    }
-  })
-
-  // FALLBACK STRATEGY: if standard selectors found nothing, try alternatives
-  if (classes.length === 0) {
-    console.warn('[HAC CLIENT] Standard selectors returned 0 classes — trying fallback selectors')
-
-    $('div[id*="plnMain_rptAssigClasses"]').each((_i, el) => {
-      const nameEl = $(el).find('span[id*="lblHeading"], .sg-header-heading, h3, .ClassHeader').first()
-      const avgEl  = $(el).find('span[id*="lblAverage"], .sg-header-average, span[id*="Average"]').first()
-      const name   = nameEl.text().replace(/\s*[-–]\s*Period\s*\d+.*$/i, '').trim()
-      const avgRaw = avgEl.text().replace(/Student\s*Avg[:.]?\s*/i, '').trim()
-      const average = avgRaw && avgRaw !== '--' && avgRaw !== 'N/A' ? avgRaw : null
-
-      if (!name) return
-
-      const scores: HACScore[] = []
-      $(el).find('tr').each((_j, row) => {
-        const cells = $(row).find('td')
-        if (cells.length < 3) return
-        const aName = cells.eq(0).text().trim()
-        if (!aName || aName.toLowerCase().includes('assignment')) return
-        scores.push({
-          name: aName,
-          category: cells.eq(2).text().trim() || 'Uncategorized',
-          score: parseFloat(cells.eq(4).text()) || null,
-          totalPoints: parseFloat(cells.eq(5).text()) || null,
-          percentage: cells.eq(6).text().trim() || '',
-          dateDue: cells.eq(1).text().trim() || '',
-        })
-      })
-
-      classes.push({ name, period: String(_i + 1), teacher: '', room: '', average, scores })
+  // Strategy 1: Standard PowerSchool HAC selectors (.AssignmentClass blocks)
+  if ($('.AssignmentClass').length > 0) {
+    console.log('[HAC CLIENT] Using Strategy 1: .AssignmentClass')
+    $('.AssignmentClass').each((_i, el) => {
+      classes.push(parseClassBlock($, $(el)))
     })
   }
 
-  // FALLBACK 2: look for any table that looks like a grade table
-  if (classes.length === 0) {
-    console.warn('[HAC CLIENT] Fallback 1 also found nothing — trying generic table scan')
+  // Strategy 2: Repeater pattern used by newer HAC instances
+  else if ($('[id*="rptAssigClasses"]').length > 0 || $('[id*="plnMain_rptAssig"]').length > 0) {
+    console.log('[HAC CLIENT] Using Strategy 2: rptAssigClasses pattern')
+    $('[id*="rptAssigClasses"] > div, [id*="plnMain_rptAssig"] > div').each((_i, el) => {
+      classes.push(parseClassBlock($, $(el)))
+    })
+  }
 
-    $('table').each((_i, table) => {
-      const rows = $(table).find('tr')
-      if (rows.length < 2) return
+  // Strategy 3: Look for class heading + table pairs anywhere on the page
+  else {
+    console.log('[HAC CLIENT] Using Strategy 3: generic heading + table scan')
+    // Find all elements that look like course headers
+    $('a[id*="lnkCourse"], span[id*="lblHeading"], h3[class*="course"], .sg-header-heading').each((_i, heading) => {
+      const $heading = $(heading)
+      const name = $heading.text().replace(/\s*[-–]\s*Period\s*\d+.*$/i, '').trim()
+      if (!name) return
 
-      const firstRowText = rows.first().text().toLowerCase()
-      if (!firstRowText.includes('assignment') && !firstRowText.includes('grade') && !firstRowText.includes('date')) return
+      // Find the next table after this heading
+      const $table = $heading.closest('div, td').find('table').first()
+      if ($table.length === 0) return
 
-      const heading = $(table).prevAll('h2, h3, span[id*="Heading"], .sg-header-heading').first().text().trim()
-      if (!heading) return
+      const average = $heading.closest('div, td').find('[id*="lblAverage"], .sg-header-average').text()
+        .replace(/Student\s*Avg[:.]\s*/i, '').trim() || null
 
       const scores: HACScore[] = []
-      rows.each((_j, row) => {
-        if (_j === 0) return
+      $table.find('tr').each((_j, row) => {
         const cells = $(row).find('td')
         if (cells.length < 2) return
         const aName = cells.eq(0).text().trim()
-        if (!aName) return
+        if (!aName || aName.toLowerCase() === 'assignment') return
         scores.push({
           name: aName,
-          category: 'Uncategorized',
-          score: null,
-          totalPoints: null,
-          percentage: cells.eq(cells.length - 1).text().trim(),
-          dateDue: cells.eq(1).text().trim(),
+          category: cells.eq(1).text().trim() || 'Uncategorized',
+          score: parseFloat(cells.eq(2).text()) || null,
+          totalPoints: parseFloat(cells.eq(3).text()) || null,
+          percentage: cells.eq(4).text().trim() || '',
+          dateDue: cells.eq(5).text().trim() || '',
         })
       })
 
-      if (scores.length > 0) {
-        classes.push({ name: heading, period: '', teacher: '', room: '', average: null, scores })
-      }
+      classes.push({ name, period: '', teacher: '', room: '', average, scores })
     })
   }
 
-  try {
-    const schedRes = await http.get(`${link}HomeAccess/Content/Student/Classes.aspx`)
-    const $s = cheerio.load(schedRes.data as string)
-
-    $s('tr.sg-asp-table-data-row').each((_i, row) => {
-      const cells = $s(row).find('td')
-      const cn = cells.eq(1).text().trim()
-      const teacher = cells.eq(3).find('a').text().trim() || cells.eq(3).text().trim()
-      const room = cells.eq(4).text().trim()
-      const match = classes.find(c => c.name === cn)
-
-      if (match) {
-        match.teacher = teacher
-        match.room = room
-      }
-    })
-  } catch {
-    // schedule enrichment is best-effort
-  }
-
+  console.log('[HAC CLIENT] Parsed', classes.length, 'classes from classwork page')
   return classes
+}
+
+// Helper: parse a single class block element into a HACClass
+function parseClassBlock(
+  $: cheerio.CheerioAPI,
+  $el: cheerio.Cheerio<AnyNode>
+): HACClass {
+  // Course name — strip period suffix
+  const rawName = $el.find('.sg-header-heading, [id*="lblHeading"], h3, .course-title, a[id*="lnkCourse"]').first().text().trim()
+  const name = rawName
+    .replace(/\s*[-–]\s*Period\s*\d+.*$/i, '')
+    .replace(/\s*[-–]\s*Pd\.?\s*\d+.*$/i, '')
+    .replace(/\s*\(\d+\)\s*$/, '')
+    .trim() || rawName
+
+  // Period
+  const periodText = $el.find('.sg-header-period, [id*="lblPeriod"]').text().replace(/Period/i, '').trim()
+
+  // Average
+  const avgRaw = $el.find('.sg-header-average, [id*="lblAverage"]').text()
+    .replace(/Student\s*Avg[:.]\s*/i, '').trim()
+  const average = avgRaw && avgRaw !== '--' && avgRaw !== 'N/A' ? avgRaw : null
+
+  // Teacher
+  const teacher = $el.find('.sg-header-teacher, [id*="lblTeacher"]').text().trim()
+
+  // Determine column positions dynamically from header row
+  const colHeaders: string[] = []
+  $el.find('tr.sg-asp-table-header-row th, thead th, tr:first-child th').each((_i, th) => {
+    colHeaders.push($(th).text().trim().toLowerCase())
+  })
+
+  const colIdx = (keywords: string[]): number => {
+    for (const kw of keywords) {
+      const idx = colHeaders.findIndex(h => h.includes(kw))
+      if (idx !== -1) return idx
+    }
+    return -1
+  }
+
+  const nameIdx  = colIdx(['assignment', 'name', 'description'])
+  const dateIdx  = colIdx(['due', 'date'])
+  const catIdx   = colIdx(['category', 'type'])
+  const scoreIdx = colIdx(['score', 'earned', 'points earned'])
+  const totalIdx = colIdx(['total', 'out of', 'possible', 'max'])
+  const pctIdx   = colIdx(['%', 'percent'])
+
+  const scores: HACScore[] = []
+
+  $el.find('tr.sg-asp-table-data-row, tbody tr').each((_j, row) => {
+    const cells = $(row).find('td')
+    if (cells.length < 2) return
+
+    const aName    = nameIdx  >= 0 ? cells.eq(nameIdx).text().trim()  : cells.eq(0).text().trim()
+    const dateDue  = dateIdx  >= 0 ? cells.eq(dateIdx).text().trim()  : cells.eq(1).text().trim()
+    const category = catIdx   >= 0 ? cells.eq(catIdx).text().trim()   : cells.eq(2).text().trim()
+    const scoreRaw = scoreIdx >= 0 ? cells.eq(scoreIdx).text().trim() : cells.eq(4).text().trim()
+    const totalRaw = totalIdx >= 0 ? cells.eq(totalIdx).text().trim() : cells.eq(5).text().trim()
+    const pctRaw   = pctIdx   >= 0 ? cells.eq(pctIdx).text().trim()  : cells.eq(6).text().trim()
+
+    if (!aName || aName.toLowerCase().includes('no assignment')) return
+
+    scores.push({
+      name: aName,
+      category: category || 'Uncategorized',
+      score: scoreRaw && scoreRaw !== '--' ? parseFloat(scoreRaw) || null : null,
+      totalPoints: totalRaw && totalRaw !== '--' ? parseFloat(totalRaw) || null : null,
+      percentage: pctRaw,
+      dateDue,
+    })
+  })
+
+  return { name, period: periodText, teacher, room: '', average, scores }
 }
 
 export async function getTranscript(sessionToken: string): Promise<HACTranscript> {
@@ -741,45 +716,54 @@ export async function getTranscript(sessionToken: string): Promise<HACTranscript
   if (!stored) throw new Error('School session expired or not found — please log in again')
 
   const { http } = restoreSession(stored)
-  const link = stored.baseUrl
+  const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400) // 0.8–1.2s delay
-  const res = await http.get(`${link}HomeAccess/Content/Student/Transcript.aspx`)
+  const res = await http.get(`${origin}HomeAccess/Grades/Transcript`, {
+    headers: { Referer: `${origin}HomeAccess/Home.aspx` },
+  })
   const $ = cheerio.load(res.data as string)
 
   const semesters: HACTranscriptEntry[] = []
 
-  $('td.sg-transcript-group').each((_i, group) => {
-    const header = $(group).find('.sg-transcript-group-heading').text().trim()
-    const yearMatch = header.match(/(\d{4})/)
-    const semMatch = header.match(/Semester\s*(\d)/i)
+  // Try new PowerSchool HAC selectors first
+  $('.sg-transcript-group, [id*="TranscriptGroup"], [id*="rptGroup"] > td').each((_i, group) => {
+    const header = $(group).find('.sg-transcript-group-heading, [id*="lblHeading"]').text().trim()
+      || $(group).find('th').first().text().trim()
+
+    const yearMatch = header.match(/(\d{4})/g)
+    const semMatch  = header.match(/Semester\s*(\d)/i) || header.match(/(1st|2nd|First|Second)/i)
+
     const courses: Array<{ name: string; grade: string; credits: string }> = []
 
-    $(group)
-      .find('tr.sg-asp-table-data-row')
-      .each((_j, row) => {
-        const cells = $(row).find('td')
-
-        courses.push({
-          name: cells.eq(0).text().trim(),
-          grade: cells.eq(1).text().trim(),
-          credits: cells.eq(2).text().trim(),
-        })
+    $(group).find('tr').each((_j, row) => {
+      const cells = $(row).find('td')
+      if (cells.length < 2) return
+      const courseName = cells.eq(0).text().trim()
+      if (!courseName || courseName.toLowerCase().includes('course')) return
+      courses.push({
+        name: courseName,
+        grade: cells.eq(1).text().trim(),
+        credits: cells.eq(2).text().trim(),
       })
-
-    semesters.push({
-      year: yearMatch?.[1] ?? '',
-      semester: semMatch?.[1] ?? '',
-      courses,
     })
+
+    if (courses.length > 0) {
+      semesters.push({
+        year: yearMatch ? yearMatch[yearMatch.length - 1] : '',
+        semester: semMatch ? semMatch[1] : String(_i + 1),
+        courses,
+      })
+    }
   })
 
-  const gpaText = $('#plnMain_rpTranscriptGroup_tblCumGPAInfo').text()
-  const gpaMatch = gpaText.match(/[\d.]+/)
+  // GPA from page
+  const gpaMatch = $('body').text().match(/Cum(?:ulative)?\s+GPA[:\s]+([\d.]+)/i)
+    || $('[id*="CumGPA"], [id*="lblGPA"]').text().match(/([\d.]+)/)
 
   return {
     semesters,
-    cumulativeGPA: gpaMatch?.[0] ?? null,
+    cumulativeGPA: gpaMatch?.[1] ?? null,
     classRank: null,
   }
 }
@@ -789,10 +773,12 @@ export async function getSchedule(sessionToken: string): Promise<object[]> {
   if (!stored) throw new Error('School session expired or not found — please log in again')
 
   const { http } = restoreSession(stored)
-  const link = stored.baseUrl
+  const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400) // 0.8–1.2s delay
-  const res = await http.get(`${link}HomeAccess/Content/Student/Classes.aspx`)
+  const res = await http.get(`${origin}HomeAccess/Classes/Schedule`, {
+    headers: { Referer: `${origin}HomeAccess/Home.aspx` },
+  })
   const $ = cheerio.load(res.data as string)
 
   const headers: string[] = []
@@ -823,9 +809,12 @@ export async function getStudentInfo(sessionToken: string): Promise<HACStudentIn
   if (!stored) throw new Error('School session expired or not found — please log in again')
 
   const { http } = restoreSession(stored)
-  const link = stored.baseUrl
+  const origin = stored.baseUrl
 
-  const res = await http.get(`${link}HomeAccess/Content/Student/Registration.aspx`)
+  // The Demographic page IS the registration page on new HAC
+  const res = await http.get(`${origin}HomeAccess/Registration/Demographic`, {
+    headers: { Referer: `${origin}HomeAccess/Home.aspx` },
+  })
   const $ = cheerio.load(res.data as string)
 
   // Helper: try multiple selectors, return first non-empty result

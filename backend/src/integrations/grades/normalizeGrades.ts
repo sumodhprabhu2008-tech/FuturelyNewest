@@ -26,7 +26,8 @@ export interface NormalizedCourse {
   period: string
   average: number | null
   letterGrade: string | null
-  assignments: NormalizedAssignment[]
+  assignments: NormalizedAssignment[]          // graded (has score)
+  upcomingAssignments: NormalizedAssignment[]  // future (no score yet)
 }
 
 // ── GPA helpers ────────────────────────────────────────────────────────────────
@@ -95,16 +96,23 @@ export function normalizeHacGrades(classes: HACClass[]): NormalizedCourse[] {
     const average = parseAverage(cls.average)
     const letterGrade = deriveLetterGrade(average)
 
+    // Split assignments: graded (has score) vs upcoming (no score = future)
+    const gradedAssignments = (cls.scores ?? []).filter(
+      s => s.score !== null || s.totalPoints !== null
+    )
+    const upcomingAssignments = (cls.scores ?? []).filter(
+      s => s.score === null && s.totalPoints === null
+    )
+
     return {
       id: makeCourseId(index, cls.name ?? ''),
       name: cls.name?.trim() ?? 'Unknown Course',
-      teacher: cls.teacher?.trim() ?? 'Unknown Teacher',
+      teacher: cls.teacher?.trim() ?? '',
       period: cls.period?.trim() ?? String(index + 1),
       average,
       letterGrade,
-      assignments: Array.isArray(cls.scores)
-        ? cls.scores.map(normalizeHacScore)
-        : [],
+      assignments: gradedAssignments.map(normalizeHacScore),
+      upcomingAssignments: upcomingAssignments.map(normalizeHacScore),
     }
   })
 }
@@ -154,6 +162,7 @@ export function normalizePsGrades(rawClasses: PSClass[]): NormalizedCourse[] {
         average,
         letterGrade,
         assignments: [],
+        upcomingAssignments: [],
       }
     })
 }

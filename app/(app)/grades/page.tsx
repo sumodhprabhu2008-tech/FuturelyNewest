@@ -34,6 +34,8 @@ export default function GradesPage() {
   const [error, setError]             = useState<string | null>(null)
   const [sortKey, setSortKey]         = useState<SortKey>('period')
   const [sortDir, setSortDir]         = useState<SortDir>('asc')
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+  const [expandedTab, setExpandedTab] = useState<Record<string, 'graded' | 'upcoming'>>({})
 
   useEffect(() => {
     // Always load seeded data first as fallback
@@ -61,6 +63,15 @@ export default function GradesPage() {
 
     Promise.all([seedLoad, liveLoad]).finally(() => setLoading(false))
   }, [])
+
+  function toggleExpanded(id: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -203,38 +214,113 @@ export default function GradesPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map(c => (
-                <tr key={c.id} style={styles.tableRow}>
-                  <td style={styles.td}>{c.name}</td>
-                  <td style={{ ...styles.td, color: 'var(--text-secondary)' }}>{c.teacher}</td>
-                  <td style={styles.td}>{c.period}</td>
-                  <td style={styles.td}>
-                    <span style={{
-                      fontSize: '11px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px',
-                      background: c.courseType === 'AP' ? 'rgba(88,166,255,0.15)'
-                        : c.courseType === 'HONORS' ? 'rgba(188,140,255,0.15)'
-                        : c.courseType === 'LIVE' ? 'rgba(0,200,150,0.15)'
-                        : 'var(--border)',
-                      color: c.courseType === 'AP' ? 'var(--info)'
-                        : c.courseType === 'HONORS' ? '#BC8CFF'
-                        : c.courseType === 'LIVE' ? 'var(--primary)'
-                        : 'var(--text-secondary)',
-                    }}>
-                      {c.courseType === 'LIVE' ? 'LIVE' : c.courseType}
-                    </span>
-                  </td>
-                  <td style={styles.td}>
-                    {c.letterGrade ? (
-                      <span style={{ color: gradeColor(c.letterGrade), fontWeight: '700', fontSize: '16px' }}>
-                        {c.letterGrade}
+              {sorted.map(c => {
+                const liveData = usingLive
+                  ? liveGrades!.find(g => g.id === c.id) ?? null
+                  : null
+                const isExpanded = expandedRows.has(String(c.id))
+                return [
+                  <tr
+                    key={c.id}
+                    style={{ ...styles.tableRow, cursor: liveData ? 'pointer' : 'default' }}
+                    onClick={() => liveData && toggleExpanded(String(c.id))}
+                  >
+                    <td style={styles.td}>{c.name}</td>
+                    <td style={{ ...styles.td, color: 'var(--text-secondary)' }}>{c.teacher}</td>
+                    <td style={styles.td}>{c.period}</td>
+                    <td style={styles.td}>
+                      <span style={{
+                        fontSize: '11px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px',
+                        background: c.courseType === 'AP' ? 'rgba(88,166,255,0.15)'
+                          : c.courseType === 'HONORS' ? 'rgba(188,140,255,0.15)'
+                          : c.courseType === 'LIVE' ? 'rgba(0,200,150,0.15)'
+                          : 'var(--border)',
+                        color: c.courseType === 'AP' ? 'var(--info)'
+                          : c.courseType === 'HONORS' ? '#BC8CFF'
+                          : c.courseType === 'LIVE' ? 'var(--primary)'
+                          : 'var(--text-secondary)',
+                      }}>
+                        {c.courseType === 'LIVE' ? 'LIVE' : c.courseType}
                       </span>
-                    ) : '—'}
-                  </td>
-                  <td style={{ ...styles.td, color: 'var(--text-secondary)' }}>
-                    {c.percentage !== null ? `${c.percentage.toFixed(1)}%` : '—'}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={styles.td}>
+                      {c.letterGrade ? (
+                        <span style={{ color: gradeColor(c.letterGrade), fontWeight: '700', fontSize: '16px' }}>
+                          {c.letterGrade}
+                        </span>
+                      ) : '—'}
+                    </td>
+                    <td style={{ ...styles.td, color: 'var(--text-secondary)' }}>
+                      {c.percentage !== null ? `${c.percentage.toFixed(1)}%` : '—'}
+                    </td>
+                  </tr>,
+                  isExpanded && liveData && (
+                    <tr key={`${c.id}-expand`}>
+                      <td colSpan={6} style={{ background: 'rgba(0,0,0,0.2)', padding: '12px 24px' }}>
+                        {/* Tab bar */}
+                        <div style={{ display: 'flex', gap: 0, marginBottom: '12px', borderBottom: '1px solid var(--border)' }}>
+                          {(['graded', 'upcoming'] as const).map(tab => {
+                            const count = tab === 'graded'
+                              ? liveData.assignments.length
+                              : (liveData.upcomingAssignments ?? []).length
+                            const active = (expandedTab[String(c.id)] ?? 'graded') === tab
+                            return (
+                              <button key={tab} onClick={e => { e.stopPropagation(); setExpandedTab(prev => ({ ...prev, [String(c.id)]: tab })) }}
+                                style={{ background: 'none', border: 'none', padding: '8px 16px', fontSize: '13px', fontWeight: active ? 600 : 400,
+                                  color: active ? 'var(--primary)' : 'var(--text-secondary)',
+                                  borderBottom: active ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer' }}>
+                                {tab === 'graded' ? `Graded (${count})` : `Upcoming (${count})`}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {/* Assignment table */}
+                        {(() => {
+                          const currentTab = expandedTab[String(c.id)] ?? 'graded'
+                          const rows = currentTab === 'graded'
+                            ? liveData.assignments
+                            : (liveData.upcomingAssignments ?? [])
+                          if (rows.length === 0) return (
+                            <p style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '8px 0' }}>
+                              {currentTab === 'graded' ? 'No graded assignments yet.' : 'No upcoming assignments.'}
+                            </p>
+                          )
+                          return (
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                              <thead>
+                                <tr>
+                                  {['Assignment', 'Category', 'Due', currentTab === 'graded' ? 'Score' : 'Status', currentTab === 'graded' ? '%' : ''].filter(Boolean).map(h => (
+                                    <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {rows.map((a, i) => (
+                                  <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                                    <td style={{ padding: '8px', color: 'var(--text)' }}>{a.name}</td>
+                                    <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{a.category}</td>
+                                    <td style={{ padding: '8px', color: 'var(--text-muted)' }}>{a.dateDue || '—'}</td>
+                                    <td style={{ padding: '8px' }}>
+                                      {currentTab === 'graded'
+                                        ? (a.score !== null && a.totalPoints !== null ? `${a.score}/${a.totalPoints}` : '—')
+                                        : <span style={{ fontSize: '11px', color: '#D29922', background: 'rgba(210,153,34,0.1)', borderRadius: 4, padding: '2px 6px' }}>Upcoming</span>
+                                      }
+                                    </td>
+                                    {currentTab === 'graded' && (
+                                      <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>{a.percentage || '—'}</td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )
+                        })()}
+                      </td>
+                    </tr>
+                  ),
+                ]
+              })}
             </tbody>
           </table>
         )}

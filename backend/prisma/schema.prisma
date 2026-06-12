@@ -86,6 +86,7 @@ model Assignment {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, title, subject])
   @@index([userId, dueDate])
   @@index([userId, completed])
 }

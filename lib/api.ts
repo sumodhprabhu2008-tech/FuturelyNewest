@@ -165,6 +165,14 @@ export interface NormalizedCourse {
     percentage: string
     dateDue: string
   }>
+  upcomingAssignments: Array<{
+    name: string
+    category: string
+    score: number | null
+    totalPoints: number | null
+    percentage: string
+    dateDue: string
+  }>
 }
 
 // Kept for backwards compatibility — same shape as NormalizedCourse
