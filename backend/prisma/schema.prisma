@@ -12,6 +12,7 @@ model User {
   email        String   @unique
   passwordHash String
   name         String?
+  tag          String?
   role         String   @default("STUDENT")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

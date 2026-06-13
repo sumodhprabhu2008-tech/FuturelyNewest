@@ -19,7 +19,7 @@ router.post('/posts', async (req: any, res) => {
     const post = await prisma.post.create({
       data: { userId, body: body.trim() },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, name: true, email: true, tag: true } },
         _count: { select: { likes: true, comments: true } },
       },
     })
@@ -45,7 +45,7 @@ router.get('/posts', async (req: any, res) => {
         skip,
         take: limit,
         include: {
-          user: { select: { id: true, name: true, email: true } },
+          user: { select: { id: true, name: true, email: true, tag: true } },
           likes: { select: { userId: true } },
           _count: { select: { likes: true, comments: true } },
         },
@@ -84,10 +84,10 @@ router.get('/posts/:postId', async (req: any, res) => {
     const post = await prisma.post.findUnique({
       where: { id: postId },
       include: {
-        user: { select: { id: true, name: true, email: true } },
+        user: { select: { id: true, name: true, email: true, tag: true } },
         comments: {
           orderBy: { createdAt: 'asc' },
-          include: { user: { select: { id: true, name: true, email: true } } },
+          include: { user: { select: { id: true, name: true, email: true, tag: true } } },
         },
         likes: { select: { userId: true } },
         _count: { select: { likes: true, comments: true } },
@@ -183,7 +183,7 @@ router.post('/posts/:postId/comments', async (req: any, res) => {
 
     const comment = await prisma.comment.create({
       data: { postId, userId, body: body.trim() },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: { user: { select: { id: true, name: true, email: true, tag: true } } },
     })
 
     res.json({ data: comment })
@@ -231,7 +231,7 @@ router.get('/users/:targetUserId/followers', async (req: any, res) => {
 
     const followers = await prisma.follow.findMany({
       where: { followingId: targetUserId },
-      include: { follower: { select: { id: true, name: true, email: true } } },
+      include: { follower: { select: { id: true, name: true, email: true, tag: true } } },
     })
 
     res.json({ data: followers.map((f) => f.follower) })
@@ -248,7 +248,7 @@ router.get('/users/:targetUserId/following', async (req: any, res) => {
 
     const following = await prisma.follow.findMany({
       where: { followerId: targetUserId },
-      include: { following: { select: { id: true, name: true, email: true } } },
+      include: { following: { select: { id: true, name: true, email: true, tag: true } } },
     })
 
     res.json({ data: following.map((f) => f.following) })
@@ -277,11 +277,12 @@ router.get('/users/search', async (req: any, res) => {
             OR: [
               { name: { contains: q } },
               { email: { contains: q } },
+              { tag: { contains: q } },
             ],
           },
         ],
       },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, tag: true },
       take: 20,
     })
 
@@ -292,7 +293,7 @@ router.get('/users/search', async (req: any, res) => {
   }
 })
 
-/** Get user profile with follow counts */
+/** Get user profile with follow counts and total likes */
 router.get('/users/:targetUserId/profile', async (req: any, res) => {
   try {
     const userId = req.userId as number
@@ -304,6 +305,7 @@ router.get('/users/:targetUserId/profile', async (req: any, res) => {
         id: true,
         name: true,
         email: true,
+        tag: true,
         _count: { select: { followers: true, following: true, posts: true } },
       },
     })
@@ -317,10 +319,94 @@ router.get('/users/:targetUserId/profile', async (req: any, res) => {
       where: { followerId_followingId: { followerId: userId, followingId: targetUserId } },
     })
 
-    res.json({ data: { ...user, isFollowing: Boolean(isFollowing) } })
+    // Calculate total likes across all of this user's posts
+    const likesAggregate = await prisma.like.aggregate({
+      where: { post: { userId: targetUserId } },
+      _count: true,
+    })
+
+    res.json({
+      data: {
+        ...user,
+        isFollowing: Boolean(isFollowing),
+        totalLikes: likesAggregate._count,
+      },
+    })
   } catch (err) {
     console.error('[FEED] Get user profile error:', err)
     res.status(500).json({ error: { message: 'Failed to fetch user profile' } })
+  }
+})
+
+/** Get posts by a specific user */
+router.get('/users/:targetUserId/posts', async (req: any, res) => {
+  try {
+    const userId = req.userId as number
+    const targetUserId = parseInt(req.params.targetUserId)
+    const page = Math.max(1, parseInt(req.query.page as string) || 1)
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20))
+    const skip = (page - 1) * limit
+
+    const [posts, total] = await Promise.all([
+      prisma.post.findMany({
+        where: { userId: targetUserId },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+        include: {
+          user: { select: { id: true, name: true, email: true, tag: true } },
+          likes: { select: { userId: true } },
+          _count: { select: { likes: true, comments: true } },
+        },
+      }),
+      prisma.post.count({ where: { userId: targetUserId } }),
+    ])
+
+    const postsWithLiked = posts.map((p) => ({
+      ...p,
+      likedByMe: p.likes.some((l) => l.userId === userId),
+      likes: undefined,
+    }))
+
+    res.json({
+      data: {
+        posts: postsWithLiked,
+        total,
+        page,
+        pageSize: limit,
+        hasMore: skip + limit < total,
+      },
+    })
+  } catch (err) {
+    console.error('[FEED] Get user posts error:', err)
+    res.status(500).json({ error: { message: 'Failed to fetch user posts' } })
+  }
+})
+
+/** Update current user's tag */
+router.put('/users/me/tag', async (req: any, res) => {
+  try {
+    const userId = req.userId as number
+    const { tag } = req.body as { tag?: string }
+
+    if (!tag || !tag.trim()) {
+      res.status(400).json({ error: { message: 'Tag is required' } })
+      return
+    }
+
+    // Sanitize tag: remove brackets if user included them, trim, max 20 chars
+    const cleanTag = tag.replace(/[[\]]/g, '').trim().slice(0, 20)
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { tag: cleanTag },
+      select: { id: true, name: true, email: true, tag: true },
+    })
+
+    res.json({ data: updated })
+  } catch (err) {
+    console.error('[FEED] Update tag error:', err)
+    res.status(500).json({ error: { message: 'Failed to update tag' } })
   }
 })
 

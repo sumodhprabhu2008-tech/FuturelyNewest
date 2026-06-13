@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { api, FeedPost, FeedComment, FeedUserProfile } from '@/lib/api'
+import { api, FeedPost, FeedComment, FeedUserProfile, FeedUser } from '@/lib/api'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,184 @@ function initials(user: { name: string | null; email: string }): string {
   return n.slice(0, 2).toUpperCase()
 }
 
+// ── User Profile Overlay ─────────────────────────────────────────────────────
+
+function UserProfileOverlay({
+  userId,
+  onClose,
+  currentUserId,
+}: {
+  userId: number
+  onClose: () => void
+  currentUserId: number
+}) {
+  const [profile, setProfile] = useState<FeedUserProfile | null>(null)
+  const [userPosts, setUserPosts] = useState<FeedPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [following, setFollowing] = useState(false)
+  const [postsLoading, setPostsLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    api.feedUserProfile(userId).then((data) => {
+      if (!cancelled) {
+        setProfile(data)
+        setFollowing(data.isFollowing)
+        setLoading(false)
+      }
+    }).catch(() => { if (!cancelled) setLoading(false) })
+
+    setPostsLoading(true)
+    api.feedUserPosts(userId).then((data) => {
+      if (!cancelled) {
+        setUserPosts(data.posts)
+        setPostsLoading(false)
+      }
+    }).catch(() => { if (!cancelled) setPostsLoading(false) })
+
+    return () => { cancelled = true }
+  }, [userId])
+
+  async function handleFollow() {
+    try {
+      const result = await api.feedToggleFollow(userId)
+      setFollowing(result.following)
+      setProfile((prev) => prev ? {
+        ...prev,
+        isFollowing: result.following,
+        _count: {
+          ...prev._count,
+          followers: result.following ? prev._count.followers + 1 : prev._count.followers - 1,
+        },
+      } : prev)
+    } catch (err) {
+      console.error('Failed to toggle follow:', err)
+    }
+  }
+
+  async function handleLike(postId: number) {
+    try {
+      const result = await api.feedToggleLike(postId)
+      setUserPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? {
+                ...p,
+                likedByMe: result.liked,
+                _count: {
+                  ...p._count,
+                  likes: result.liked ? p._count.likes + 1 : p._count.likes - 1,
+                },
+              }
+            : p
+        )
+      )
+      setProfile((prev) => prev ? {
+        ...prev,
+        totalLikes: result.liked ? prev.totalLikes + 1 : prev.totalLikes - 1,
+      } : prev)
+    } catch (err) {
+      console.error('Failed to toggle like:', err)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={styles.profileOverlay} onClick={onClose}>
+        <div style={styles.profilePanel} onClick={(e) => e.stopPropagation()}>
+          <div style={styles.emptyText}>Loading profile...</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <div style={styles.profileOverlay} onClick={onClose}>
+        <div style={styles.profilePanel} onClick={(e) => e.stopPropagation()}>
+          <div style={styles.emptyText}>User not found</div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={styles.profileOverlay} onClick={onClose}>
+      <div style={styles.profilePanel} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.profileHeader}>
+          <div style={styles.profileAvatar}>{initials(profile)}</div>
+          <div style={{ flex: 1 }}>
+            <div style={styles.profileName}>{displayName(profile)}</div>
+            {profile.tag && (
+              <div style={styles.profileTag}>[{profile.tag}]</div>
+            )}
+            <div style={styles.profileEmail}>{profile.email}</div>
+          </div>
+          <button style={styles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+
+        {/* Stats */}
+        <div style={styles.profileStats}>
+          <div style={styles.profileStat}>
+            <div style={styles.profileStatNum}>{profile._count.followers}</div>
+            <div style={styles.profileStatLabel}>Followers</div>
+          </div>
+          <div style={styles.profileStat}>
+            <div style={styles.profileStatNum}>{profile._count.following}</div>
+            <div style={styles.profileStatLabel}>Following</div>
+          </div>
+          <div style={styles.profileStat}>
+            <div style={styles.profileStatNum}>{profile._count.posts}</div>
+            <div style={styles.profileStatLabel}>Posts</div>
+          </div>
+          <div style={styles.profileStat}>
+            <div style={styles.profileStatNum}>{profile.totalLikes}</div>
+            <div style={styles.profileStatLabel}>Likes</div>
+          </div>
+        </div>
+
+        {/* Follow button */}
+        {userId !== currentUserId && (
+          <button
+            style={{
+              ...styles.profileFollowBtn,
+              background: following ? 'transparent' : 'var(--primary)',
+              color: following ? 'var(--primary)' : '#000',
+              borderColor: 'var(--primary)',
+            }}
+            onClick={handleFollow}
+          >
+            {following ? 'Following' : 'Follow'}
+          </button>
+        )}
+
+        {/* User's posts */}
+        <div style={styles.profilePostsSection}>
+          <h3 style={styles.profilePostsTitle}>Posts</h3>
+          {postsLoading ? (
+            <div style={styles.emptyText}>Loading posts...</div>
+          ) : userPosts.length === 0 ? (
+            <div style={styles.emptyText}>No posts yet.</div>
+          ) : (
+            userPosts.map((post) => (
+              <div key={post.id} style={styles.profilePostCard}>
+                <div style={styles.profilePostBody}>{post.body}</div>
+                <div style={styles.profilePostMeta}>
+                  <span style={styles.profilePostTime}>{timeAgo(post.createdAt)}</span>
+                  <span style={styles.profilePostLikes}>
+                    {post.likedByMe ? '❤️' : '🤍'} {post._count.likes}
+                  </span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Post Card ────────────────────────────────────────────────────────────────
 
 function PostCard({
@@ -31,12 +209,14 @@ function PostCard({
   onLike,
   onDelete,
   onOpenComments,
+  onOpenProfile,
   currentUserId,
 }: {
   post: FeedPost
   onLike: (id: number) => void
   onDelete: (id: number) => void
   onOpenComments: (id: number) => void
+  onOpenProfile: (userId: number) => void
   currentUserId: number
 }) {
   return (
@@ -44,7 +224,17 @@ function PostCard({
       <div style={styles.cardHeader}>
         <div style={styles.avatar}>{initials(post.user)}</div>
         <div>
-          <div style={styles.authorName}>{displayName(post.user)}</div>
+          <div style={styles.authorNameRow}>
+            <span
+              style={styles.authorNameClickable}
+              onClick={() => onOpenProfile(post.user.id)}
+            >
+              {displayName(post.user)}
+            </span>
+            {post.user.tag && (
+              <span style={styles.postTag}>[{post.user.tag}]</span>
+            )}
+          </div>
           <div style={styles.time}>{timeAgo(post.createdAt)}</div>
         </div>
         {post.userId === currentUserId && (
@@ -152,7 +342,10 @@ function CommentSection({
           ) : (
             comments.map((c) => (
               <div key={c.id} style={styles.commentItem}>
-                <div style={styles.commentAuthor}>{displayName(c.user)}</div>
+                <div style={styles.commentAuthor}>
+                  {displayName(c.user)}
+                  {c.user.tag && <span style={styles.commentTag}> [{c.user.tag}]</span>}
+                </div>
                 <div style={styles.commentBody}>{c.body}</div>
                 <div style={styles.commentTime}>{timeAgo(c.createdAt)}</div>
               </div>
@@ -178,12 +371,19 @@ function CommentSection({
 
 // ── User Search ──────────────────────────────────────────────────────────────
 
-function UserSearch({ onFollow, onOpenProfile }: {
-  onFollow: (userId: number) => void
+function UserSearch({
+  currentUserId,
+  onOpenProfile,
+  followedUsers,
+  onFollow,
+}: {
+  currentUserId: number
   onOpenProfile: (userId: number) => void
+  followedUsers: Set<number>
+  onFollow: (userId: number) => void
 }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<Array<{ id: number; name: string | null; email: string }>>([])
+  const [results, setResults] = useState<Array<{ id: number; name: string | null; email: string; tag: string | null }>>([])
   const [searching, setSearching] = useState(false)
 
   useEffect(() => {
@@ -209,13 +409,31 @@ function UserSearch({ onFollow, onOpenProfile }: {
       {searching && <div style={styles.emptyText}>Searching...</div>}
       {results.map((u) => (
         <div key={u.id} style={styles.searchResult}>
-          <div style={styles.avatarSmall}>{initials(u)}</div>
-          <div style={{ flex: 1 }}>
-            <div style={styles.authorName}>{displayName(u)}</div>
+          <div
+            style={{ ...styles.avatarSmall, cursor: 'pointer' }}
+            onClick={() => onOpenProfile(u.id)}
+          >
+            {initials(u)}
+          </div>
+          <div
+            style={{ flex: 1, cursor: 'pointer' }}
+            onClick={() => onOpenProfile(u.id)}
+          >
+            <div style={styles.authorNameRow}>
+              <span style={styles.authorName}>{displayName(u)}</span>
+              {u.tag && <span style={styles.postTag}>[{u.tag}]</span>}
+            </div>
             <div style={styles.time}>{u.email}</div>
           </div>
-          <button style={styles.followBtn} onClick={() => onFollow(u.id)}>
-            Follow
+          <button
+            style={{
+              ...styles.followBtn,
+              background: followedUsers.has(u.id) ? 'var(--primary)' : 'transparent',
+              color: followedUsers.has(u.id) ? '#000' : 'var(--primary)',
+            }}
+            onClick={() => onFollow(u.id)}
+          >
+            {followedUsers.has(u.id) ? 'Following' : 'Follow'}
           </button>
         </div>
       ))}
@@ -235,6 +453,11 @@ export default function StudyFeedPage() {
   const [commentPostId, setCommentPostId] = useState<number | null>(null)
   const [currentUserId, setCurrentUserId] = useState<number>(0)
   const [tab, setTab] = useState<'feed' | 'search'>('feed')
+  const [profileUserId, setProfileUserId] = useState<number | null>(null)
+  const [followedUsers, setFollowedUsers] = useState<Set<number>>(new Set())
+  const [tagInput, setTagInput] = useState('')
+  const [myTag, setMyTag] = useState<string | null>(null)
+  const [editingTag, setEditingTag] = useState(false)
 
   const loadPosts = useCallback(async (p: number) => {
     try {
@@ -266,7 +489,13 @@ export default function StudyFeedPage() {
       const token = localStorage.getItem('ns_token')
       if (token) {
         const payload = JSON.parse(atob(token.split('.')[1]))
-        setCurrentUserId(payload.sub || 0)
+        const userId = payload.sub || 0
+        setCurrentUserId(userId)
+        // Load current user's profile to get their tag
+        api.feedUserProfile(userId).then((data) => {
+          setMyTag(data.tag)
+          setTagInput(data.tag || '')
+        }).catch(() => {})
       }
     } catch { /* ignore */ }
     loadPosts(1)
@@ -339,9 +568,37 @@ export default function StudyFeedPage() {
 
   async function handleFollow(userId: number) {
     try {
-      await api.feedToggleFollow(userId)
+      const result = await api.feedToggleFollow(userId)
+      setFollowedUsers((prev) => {
+        const next = new Set(prev)
+        if (result.following) {
+          next.add(userId)
+        } else {
+          next.delete(userId)
+        }
+        return next
+      })
     } catch (err) {
       console.error('Failed to toggle follow:', err)
+    }
+  }
+
+  async function handleSaveTag() {
+    if (!tagInput.trim()) return
+    try {
+      const updated = await api.feedUpdateTag(tagInput.trim())
+      setMyTag(updated.tag)
+      setEditingTag(false)
+      // Update posts to reflect new tag
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.userId === currentUserId
+            ? { ...p, user: { ...p.user, tag: updated.tag } }
+            : p
+        )
+      )
+    } catch (err) {
+      console.error('Failed to update tag:', err)
     }
   }
 
@@ -367,6 +624,38 @@ export default function StudyFeedPage() {
 
       {tab === 'feed' ? (
         <>
+          {/* Tag management */}
+          <div style={styles.tagBar}>
+            {editingTag ? (
+              <div style={styles.tagEditRow}>
+                <input
+                  style={styles.tagInput}
+                  placeholder="Your tag (e.g. Senior)"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  maxLength={20}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveTag()}
+                />
+                <button style={styles.tagSaveBtn} onClick={handleSaveTag}>Save</button>
+                <button
+                  style={styles.tagCancelBtn}
+                  onClick={() => { setEditingTag(false); setTagInput(myTag || '') }}
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div style={styles.tagDisplayRow}>
+                <span style={styles.tagLabel}>
+                  Your tag: {myTag ? <span style={styles.tagBadge}>[{myTag}]</span> : <span style={styles.tagNone}>None set</span>}
+                </span>
+                <button style={styles.tagEditBtn} onClick={() => setEditingTag(true)}>
+                  {myTag ? 'Edit' : 'Set Tag'}
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* New Post */}
           <div style={styles.newPostCard}>
             <textarea
@@ -409,6 +698,7 @@ export default function StudyFeedPage() {
                   onLike={handleLike}
                   onDelete={handleDelete}
                   onOpenComments={(id) => setCommentPostId(id)}
+                  onOpenProfile={(id) => setProfileUserId(id)}
                   currentUserId={currentUserId}
                 />
               ))}
@@ -427,7 +717,12 @@ export default function StudyFeedPage() {
           )}
         </>
       ) : (
-        <UserSearch onFollow={handleFollow} onOpenProfile={() => {}} />
+        <UserSearch
+          currentUserId={currentUserId}
+          onOpenProfile={(id) => setProfileUserId(id)}
+          followedUsers={followedUsers}
+          onFollow={handleFollow}
+        />
       )}
 
       {/* Comment overlay */}
@@ -444,6 +739,15 @@ export default function StudyFeedPage() {
               )
             )
           }}
+        />
+      )}
+
+      {/* Profile overlay */}
+      {profileUserId !== null && (
+        <UserProfileOverlay
+          userId={profileUserId}
+          onClose={() => setProfileUserId(null)}
+          currentUserId={currentUserId}
         />
       )}
     </div>
@@ -465,6 +769,42 @@ const styles: Record<string, React.CSSProperties> = {
   tabActive: {
     background: 'rgba(0,200,150,0.12)', color: 'var(--primary)',
     borderColor: 'var(--primary)',
+  },
+
+  // Tag management
+  tagBar: {
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: '10px', padding: '10px 14px', marginBottom: '16px',
+    fontSize: '13px',
+  },
+  tagDisplayRow: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  },
+  tagLabel: { color: 'var(--text-secondary)' },
+  tagBadge: { color: 'var(--primary)', fontWeight: '600' },
+  tagNone: { color: 'var(--text-muted)', fontStyle: 'italic' },
+  tagEditBtn: {
+    padding: '4px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+    background: 'transparent', color: 'var(--text-secondary)', fontSize: '12px',
+    cursor: 'pointer',
+  },
+  tagEditRow: {
+    display: 'flex', gap: '8px', alignItems: 'center',
+  },
+  tagInput: {
+    flex: 1, padding: '6px 10px', borderRadius: '6px',
+    border: '1px solid var(--border)', background: 'var(--bg)',
+    color: 'var(--text)', fontSize: '13px',
+  },
+  tagSaveBtn: {
+    padding: '6px 12px', borderRadius: '6px', border: 'none',
+    background: 'var(--primary)', color: '#000', fontWeight: '600',
+    fontSize: '12px', cursor: 'pointer',
+  },
+  tagCancelBtn: {
+    padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border)',
+    background: 'transparent', color: 'var(--text-secondary)',
+    fontSize: '12px', cursor: 'pointer',
   },
 
   // New post
@@ -508,7 +848,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontWeight: '700', fontSize: '12px', flexShrink: 0,
   },
+  authorNameRow: {
+    display: 'flex', alignItems: 'center', gap: '6px',
+  },
+  authorNameClickable: {
+    fontSize: '14px', fontWeight: '600', color: 'var(--text)',
+    cursor: 'pointer', textDecoration: 'underline',
+    textUnderlineOffset: '2px',
+  },
   authorName: { fontSize: '14px', fontWeight: '600', color: 'var(--text)' },
+  postTag: {
+    fontSize: '12px', fontWeight: '600', color: 'var(--primary)',
+    background: 'rgba(0,200,150,0.1)', padding: '1px 6px',
+    borderRadius: '4px',
+  },
   time: { fontSize: '12px', color: 'var(--text-muted)' },
   deleteBtn: {
     marginLeft: 'auto', background: 'transparent', border: 'none',
@@ -551,6 +904,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 0', borderBottom: '1px solid var(--border)',
   },
   commentAuthor: { fontSize: '13px', fontWeight: '600', color: 'var(--text)' },
+  commentTag: { fontSize: '11px', color: 'var(--primary)', fontWeight: '600' },
   commentBody: { fontSize: '14px', color: 'var(--text)', marginTop: '4px' },
   commentTime: { fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' },
   commentInputRow: {
@@ -585,6 +939,76 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'transparent', color: 'var(--primary)', fontWeight: '600',
     fontSize: '13px', cursor: 'pointer',
   },
+
+  // Profile overlay
+  profileOverlay: {
+    position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0,
+    background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  profilePanel: {
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: '12px', width: '90%', maxWidth: '480px',
+    maxHeight: '85vh', overflow: 'auto' as const, padding: '24px',
+  },
+  profileHeader: {
+    display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px',
+  },
+  profileAvatar: {
+    width: '56px', height: '56px', borderRadius: '50%',
+    background: 'var(--primary)', color: '#000',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontWeight: '700', fontSize: '20px', flexShrink: 0,
+  },
+  profileName: {
+    fontSize: '20px', fontWeight: '700', color: 'var(--text)',
+  },
+  profileTag: {
+    fontSize: '13px', fontWeight: '600', color: 'var(--primary)',
+    background: 'rgba(0,200,150,0.1)', padding: '2px 8px',
+    borderRadius: '4px', display: 'inline-block', marginTop: '2px',
+  },
+  profileEmail: {
+    fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px',
+  },
+  profileStats: {
+    display: 'flex', justifyContent: 'space-around', marginBottom: '16px',
+    padding: '12px 0', borderTop: '1px solid var(--border)',
+    borderBottom: '1px solid var(--border)',
+  },
+  profileStat: { textAlign: 'center' as const },
+  profileStatNum: {
+    fontSize: '20px', fontWeight: '700', color: 'var(--text)',
+  },
+  profileStatLabel: {
+    fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px',
+  },
+  profileFollowBtn: {
+    width: '100%', padding: '10px', borderRadius: '8px',
+    border: '1px solid var(--primary)', fontWeight: '600',
+    fontSize: '14px', cursor: 'pointer', marginBottom: '20px',
+  },
+  profilePostsSection: {
+    borderTop: '1px solid var(--border)', paddingTop: '16px',
+  },
+  profilePostsTitle: {
+    fontSize: '16px', fontWeight: '600', color: 'var(--text)',
+    marginBottom: '12px',
+  },
+  profilePostCard: {
+    padding: '12px', background: 'var(--bg)',
+    border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '8px',
+  },
+  profilePostBody: {
+    fontSize: '14px', color: 'var(--text)', lineHeight: '1.5',
+    whiteSpace: 'pre-wrap' as const,
+  },
+  profilePostMeta: {
+    display: 'flex', justifyContent: 'space-between', marginTop: '8px',
+    fontSize: '12px',
+  },
+  profilePostTime: { color: 'var(--text-muted)' },
+  profilePostLikes: { color: 'var(--text-secondary)' },
 
   // Empty state
   emptyState: {
