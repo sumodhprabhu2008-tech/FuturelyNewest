@@ -66,6 +66,11 @@ interface StudentData {
 }
 
 export const api = {
+  register: (email: string, password: string, name?: string) =>
+    request<LoginResult>('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    }),
   login: (email: string, password: string) =>
     request<LoginResult>('/api/auth/login', {
       method: 'POST',

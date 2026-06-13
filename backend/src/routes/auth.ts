@@ -6,6 +6,62 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+router.post('/register', async (req: Request, res: Response): Promise<void> => {
+  const { email, password, name } = req.body as { email?: string; password?: string; name?: string }
+
+  if (!email || !password) {
+    res.status(400).json({
+      data: null,
+      error: { code: 'VALIDATION_ERROR', message: 'email and password required' },
+    })
+    return
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({
+      data: null,
+      error: { code: 'VALIDATION_ERROR', message: 'Password must be at least 6 characters' },
+    })
+    return
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      res.status(409).json({
+        data: null,
+        error: { code: 'CONFLICT', message: 'An account with this email already exists' },
+      })
+      return
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        name: name ?? email.split('@')[0],
+        role: 'STUDENT',
+      },
+    })
+
+    const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET!, { expiresIn: '7d' })
+
+    res.status(201).json({
+      data: {
+        token,
+        user: { id: user.id, email: user.email, name: user.name, role: user.role },
+      },
+    })
+  } catch (e) {
+    console.error('REGISTER ERROR:', e)
+    res.status(500).json({
+      data: null,
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
+    })
+  }
+})
+
 router.post('/login', async (req: Request, res: Response): Promise<void> => {
   const { email, password } = req.body as { email?: string; password?: string }
 

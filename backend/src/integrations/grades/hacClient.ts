@@ -564,40 +564,78 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
     throw new Error('School session expired — please log in again')
   }
 
-  const $ = cheerio.load(res.data as string)
+  let pageHtml = res.data as string
+  const $ = cheerio.load(pageHtml)
+
+  // Katy ISD HAC (and similar PowerSchool districts) load the actual
+  // classwork content inside an iframe.  If the outer page has no assignment
+  // data but does reference an iframe src, fetch that URL to get the real data.
+  const iframeSrc = $('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Assignment"]')
+    .attr('src')
+
+  if (iframeSrc && ($('.AssignmentClass').length === 0 && $('table').length === 0)) {
+    const iframeUrl = iframeSrc.startsWith('http')
+      ? iframeSrc
+      : new URL(iframeSrc, classworkUrl).toString()
+
+    console.log('[HAC CLIENT] Outer page has no grade tables — fetching iframe content:', iframeUrl)
+
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(iframeUrl, {
+        headers: {
+          Referer: classworkUrl,
+          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      })
+
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) {
+        pageHtml = iframeRes.data
+        console.log('[HAC CLIENT] Iframe content fetched:', { htmlLength: pageHtml.length })
+      } else {
+        console.warn('[HAC CLIENT] Iframe content too short or empty — using outer page')
+      }
+    } catch (iframeErr) {
+      console.warn('[HAC CLIENT] Failed to fetch iframe content:',
+        iframeErr instanceof Error ? iframeErr.message : String(iframeErr))
+    }
+  }
+
+  const $final = cheerio.load(pageHtml)
 
   // Save raw HTML for debugging
   try {
-    fs.writeFileSync('hac_classwork_debug.html', res.data as string, 'utf8')
+    fs.writeFileSync('hac_classwork_debug.html', pageHtml, 'utf8')
     console.log('[HAC CLIENT] Saved classwork HTML to hac_classwork_debug.html')
   } catch { /* ignore */ }
 
   // Log page structure to understand the HTML
   console.log('[HAC CLIENT] Classwork page structure check:', {
-    hasAssignmentClass: $('.AssignmentClass').length,
-    hasSgHeader: $('.sg-header').length,
-    hasClassBlock: $('[class*="classBlock"]').length,
-    hasAssignmentGrid: $('[id*="AssignmentGrid"]').length,
-    hasRptAssig: $('[id*="rptAssig"]').length,
-    hasClassGrade: $('[class*="ClassGrade"]').length,
-    tableCount: $('table').length,
-    divCount: $('div[class]').length,
+    hasAssignmentClass: $final('.AssignmentClass').length,
+    hasSgHeader: $final('.sg-header').length,
+    hasClassBlock: $final('[class*="classBlock"]').length,
+    hasAssignmentGrid: $final('[id*="AssignmentGrid"]').length,
+    hasRptAssig: $final('[id*="rptAssig"]').length,
+    hasClassGrade: $final('[class*="ClassGrade"]').length,
+    tableCount: $final('table').length,
+    divCount: $final('div[class]').length,
   })
 
   const classes: HACClass[] = []
 
   // Strategy 1: Standard PowerSchool HAC selectors (.AssignmentClass blocks)
-  if ($('.AssignmentClass').length > 0) {
+  if ($final('.AssignmentClass').length > 0) {
     console.log('[HAC CLIENT] Using Strategy 1: .AssignmentClass')
-    $('.AssignmentClass').each((_i, el) => {
+    $final('.AssignmentClass').each((_i, el) => {
       classes.push(parseClassBlock($, $(el)))
     })
   }
 
   // Strategy 2: Repeater pattern used by newer HAC instances
-  else if ($('[id*="rptAssigClasses"]').length > 0 || $('[id*="plnMain_rptAssig"]').length > 0) {
+  else if ($final('[id*="rptAssigClasses"]').length > 0 || $final('[id*="plnMain_rptAssig"]').length > 0) {
     console.log('[HAC CLIENT] Using Strategy 2: rptAssigClasses pattern')
-    $('[id*="rptAssigClasses"] > div, [id*="plnMain_rptAssig"] > div').each((_i, el) => {
+    $final('[id*="rptAssigClasses"] > div, [id*="plnMain_rptAssig"] > div').each((_i, el) => {
       classes.push(parseClassBlock($, $(el)))
     })
   }
@@ -606,8 +644,8 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
   else {
     console.log('[HAC CLIENT] Using Strategy 3: generic heading + table scan')
     // Find all elements that look like course headers
-    $('a[id*="lnkCourse"], span[id*="lblHeading"], h3[class*="course"], .sg-header-heading').each((_i, heading) => {
-      const $heading = $(heading)
+    $final('a[id*="lnkCourse"], span[id*="lblHeading"], h3[class*="course"], .sg-header-heading').each((_i, heading) => {
+      const $heading = $final(heading)
       const name = $heading.text().replace(/\s*[-–]\s*Period\s*\d+.*$/i, '').trim()
       if (!name) return
 

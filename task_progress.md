@@ -1,0 +1,6 @@
+- [x] Analyze codebase structure and understand grade flow
+- [ ] Test HAC login with user credentials to confirm login works
+- [ ] Debug HAC grade scraping by examining raw HTML from classwork page
+- [ ] Fix HAC scraping selectors to match current HAC HTML structure
+- [ ] Verify grades display real data instead of test data
+- [ ] Run backend and confirm end-to-end flow
