@@ -10,6 +10,7 @@ import studentsRouter from './routes/students'
 import roadmapRouter from './routes/roadmap'
 import aiRouter from './routes/ai'
 import feedRouter from './routes/feed'
+import parentRouter from './routes/parent'
 import { requireAuth } from './middleware/auth'
 import gradesIntegrationRouter from './integrations/grades/gradesRouter'
 
@@ -132,5 +133,7 @@ if (ENABLE_DEV_INTEGRATION_AUTH_BYPASS) {
   app.use('/api/feed', requireAuth, feedRouter)
   app.use('/api/integrations/grades', requireAuth, gradesIntegrationRouter)
 }
+
+app.use('/api/parent', parentRouter)
 
 export default app

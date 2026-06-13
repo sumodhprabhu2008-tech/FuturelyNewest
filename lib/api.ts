@@ -66,10 +66,10 @@ interface StudentData {
 }
 
 export const api = {
-  register: (email: string, password: string, name?: string) =>
+  register: (email: string, password: string, name?: string, role?: string) =>
     request<LoginResult>('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password, name }),
+      body: JSON.stringify({ email, password, name, role }),
     }),
   login: (email: string, password: string) =>
     request<LoginResult>('/api/auth/login', {
@@ -233,6 +233,29 @@ export const api = {
       `/api/feed/users/${targetUserId}/tag`,
       { method: 'DELETE' },
     ),
+
+  // ── Parent API ────────────────────────────────────────────────────────────────
+
+  parentLinkStudent: (studentEmail: string) =>
+    request<{ linked: boolean; student: { id: number; name: string | null; email: string } }>(
+      '/api/parent/link-student',
+      { method: 'POST', body: JSON.stringify({ studentEmail }) },
+    ),
+
+  parentStudents: () =>
+    request<ParentStudentSummary[]>('/api/parent/students'),
+
+  parentStudentDetail: (studentId: number) =>
+    request<StudentData>(`/api/parent/students/${studentId}`),
+
+  parentUnlinkStudent: (studentId: number) =>
+    request<{ unlinked: boolean }>(`/api/parent/students/${studentId}`, { method: 'DELETE' }),
+
+  parentStudentChat: (studentId: number, message: string) =>
+    request<{ reply: string }>(`/api/parent/students/${studentId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
 }
 
 // ── Study Feed types ───────────────────────────────────────────────────────
@@ -275,6 +298,21 @@ export interface FeedUserProfile {
   isFollowing: boolean
   totalLikes: number
   _count: { followers: number; following: number; posts: number }
+}
+
+// ── Parent API ─────────────────────────────────────────────────────────────────
+
+export interface ParentStudentSummary {
+  id: number
+  name: string | null
+  email: string
+  gradeLevel: number | null
+  graduationYear: number | null
+  weightedGpa: number
+  unweightedGpa: number
+  pendingAssignments: number
+  totalCourses: number
+  courses: Array<{ name: string; letterGrade: string | null; percentage: number | null }>
 }
 
 export type { StudentData }

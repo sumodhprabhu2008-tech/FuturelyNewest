@@ -1,6 +1,7 @@
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -28,6 +29,8 @@ model User {
   likes           Like[]
   following       Follow[] @relation("follower")
   followers       Follow[] @relation("following")
+  parentLinks     ParentStudentLink[] @relation("ParentLinks")
+  studentLinks    ParentStudentLink[] @relation("StudentLinks")
 }
 
 model StudentProfile {
@@ -173,4 +176,16 @@ model Follow {
   following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
+}
+
+model ParentStudentLink {
+  id        Int      @id @default(autoincrement())
+  parentId  Int
+  studentId Int
+  createdAt DateTime @default(now())
+
+  parent  User @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
+  student User @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, studentId])
 }

@@ -7,7 +7,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 const router = Router()
 
 router.post('/register', async (req: Request, res: Response): Promise<void> => {
-  const { email, password, name } = req.body as { email?: string; password?: string; name?: string }
+  const { email, password, name, role: roleInput } = req.body as { email?: string; password?: string; name?: string; role?: string }
 
   if (!email || !password) {
     res.status(400).json({
@@ -36,12 +36,13 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
+    const userRole = roleInput === 'PARENT' ? 'PARENT' : 'STUDENT'
     const user = await prisma.user.create({
       data: {
         email,
         passwordHash,
         name: name ?? email.split('@')[0],
-        role: 'STUDENT',
+        role: userRole,
       },
     })
 

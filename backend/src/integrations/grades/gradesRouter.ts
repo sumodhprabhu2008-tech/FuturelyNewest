@@ -229,17 +229,39 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
       hasSessionToken: Boolean(sessionToken),
     })
 
+    // Block if another account already owns this school username
+    const taken = await prisma.schoolConnection.findFirst({
+      where: {
+        systemType: 'HAC',
+        districtUrl: resolvedBaseUrl,
+        hacUsername: username,
+        NOT: { userId },
+      },
+    })
+    if (taken) {
+      res.status(409).json({
+        data: null,
+        error: {
+          code: 'SCHOOL_ACCOUNT_TAKEN',
+          message: 'This school account is already linked to another NextStep account. Each school ID can only be used once.',
+        },
+      })
+      return
+    }
+
     await prisma.schoolConnection.upsert({
       where: { userId },
       update: {
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
+        hacUsername: username,
         lastSynced: new Date(),
       },
       create: {
         userId,
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
+        hacUsername: username,
       },
     })
 
