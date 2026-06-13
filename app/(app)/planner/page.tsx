@@ -51,7 +51,7 @@ export default function PlannerPage() {
     } : prev)
     try {
       const token = localStorage.getItem('ns_token')
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'}/assignments/${id}/toggle`, {
+      await fetch(`/assignments/${id}/toggle`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ completed }),
