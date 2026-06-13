@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { api } from '../../../../lib/api'
 import WhatIfScorer from '../../../../components/ui/WhatIfScorer'
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 interface Assignment {
   name: string
@@ -26,6 +25,14 @@ interface Course {
 
 const GRADE_COLOR: Record<string, string> = { A: '#22C55E', B: '#10B981', C: '#F59E0B', D: '#F97316', F: '#EF4444' }
 
+const ORDINALS: Record<string, string> = { '1': '1st', '2': '2nd', '3': '3rd', '4': '4th', '5': '5th', '6': '6th', '7': '7th', '8': '8th' }
+function periodLabel(p: string): string {
+  if (/^\(.*\)$/.test(p)) return 'All Periods'   // "(All Runs)" → "All Periods"
+  const ord = ORDINALS[p.trim()]
+  if (ord) return `${ord} 6 Wks`                  // "1" → "1st 6 Wks"
+  return p
+}
+
 function letterFromAvg(avg: string | null): string {
   if (!avg) return ''
   const n = parseFloat(avg)
@@ -45,29 +52,39 @@ function avgColor(avg: string | null): string {
 export default function ClassworkPage() {
   const router = useRouter()
   const [courses, setCourses] = useState<Course[]>([])
+  const [availablePeriods, setAvailablePeriods] = useState<string[]>([])
+  const [currentPeriod, setCurrentPeriod] = useState('')
+  const [selectedPeriod, setSelectedPeriod] = useState('')
   const [loading, setLoading] = useState(true)
+  const [periodLoading, setPeriodLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
-  const [tabMap, setTabMap] = useState<Record<number, 'assignments' | 'upcoming'>>({})
   const [openWhatIf, setOpenWhatIf] = useState<number | null>(null)
 
-  useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('ns_token') : null
-    fetch(`${BASE}/api/integrations/grades/classwork`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
-      .then(r => r.json())
-      .then((json: { data?: { classes?: Course[] }; error?: { message?: string } | string }) => {
-        if (json.error) {
-          const msg = typeof json.error === 'string' ? json.error : (json.error?.message ?? 'Failed to load grades')
-          setError(msg)
-          return
-        }
-        setCourses(json.data?.classes ?? [])
+  const loadPeriod = useCallback((period?: string) => {
+    if (period) setPeriodLoading(true)
+    else setLoading(true)
+
+    api.portalClasswork(period)
+      .then(json => {
+        setCourses(json.classes ?? [])
+        setAvailablePeriods(json.availablePeriods ?? [])
+        const active = period ?? json.currentPeriod ?? ''
+        setCurrentPeriod(active)
+        if (!period) setSelectedPeriod(active)
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load grades'))
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setPeriodLoading(false) })
   }, [])
+
+  useEffect(() => { loadPeriod() }, [loadPeriod])
+
+  function handlePeriodChange(p: string) {
+    setSelectedPeriod(p)
+    loadPeriod(p)
+    setExpanded(new Set())
+    setOpenWhatIf(null)
+  }
 
   function toggleRow(i: number) {
     setExpanded(prev => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n })
@@ -89,11 +106,39 @@ export default function ClassworkPage() {
         </div>
       )}
 
-      {courses.length === 0 && !error && (
+      {availablePeriods.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <label style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', display: 'block', marginBottom: 8 }}>
+            Grading Period
+          </label>
+          <select
+            value={selectedPeriod}
+            onChange={e => handlePeriodChange(e.target.value)}
+            disabled={periodLoading}
+            style={{
+              background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '9px 14px', fontSize: 13.5, fontWeight: 500, cursor: 'pointer',
+              minWidth: 200, appearance: 'auto', outline: 'none',
+            }}
+          >
+            {availablePeriods.map(p => (
+              <option key={p} value={p}>{periodLabel(p)}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {periodLoading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {[1, 2, 3, 4, 5].map(i => <div key={i} style={{ height: 56, background: 'rgba(255,255,255,0.04)', borderRadius: 10 }} />)}
+        </div>
+      )}
+
+      {!periodLoading && courses.length === 0 && !error && (
         <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No grade data available. Connect your school portal in Settings.</p>
       )}
 
-      {courses.length > 0 && (
+      {!periodLoading && courses.length > 0 && (
         <div className="ns-card" style={{ padding: 0, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' as const }}>
             <thead>
@@ -109,8 +154,6 @@ export default function ClassworkPage() {
             <tbody>
               {courses.flatMap((c, i) => {
                 const isExpanded = expanded.has(i)
-                const tab = tabMap[i] ?? 'assignments'
-                const rows = tab === 'assignments' ? c.scores : []
                 const letter = letterFromAvg(c.average)
                 return [
                   <tr key={i} className="ns-tr"
@@ -145,19 +188,14 @@ export default function ClassworkPage() {
                   isExpanded && (
                     <tr key={`${i}-exp`}>
                       <td colSpan={6} style={{ background: 'rgba(0,0,0,0.25)', padding: '12px 20px' }}>
-                        <div style={{ display: 'flex', gap: 0, marginBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                          {(['assignments'] as const).map(t => (
-                            <button key={t} onClick={e => { e.stopPropagation(); setTabMap(p => ({ ...p, [i]: t })) }}
-                              style={{ background: 'none', border: 'none', padding: '6px 14px', fontSize: 12, fontWeight: 600, color: 'var(--primary)', borderBottom: '2px solid var(--primary)', cursor: 'pointer' }}>
-                              Assignments ({c.scores.length})
-                            </button>
-                          ))}
+                        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.4px', marginBottom: 10 }}>
+                          Assignments ({c.scores.length})
                         </div>
-                        {rows.length === 0
+                        {c.scores.length === 0
                           ? <p style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>No assignments found.</p>
                           : <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 12.5 }}>
                               <thead><tr>{['Assignment','Category','Due','Score'].map(h => <th key={h} style={{ textAlign: 'left' as const, padding: '4px 8px', color: 'var(--text-muted)', fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase' as const }}>{h}</th>)}</tr></thead>
-                              <tbody>{rows.map((a, j) => (
+                              <tbody>{c.scores.map((a, j) => (
                                 <tr key={j} style={{ borderTop: '1px solid var(--border)' }}>
                                   <td style={{ padding: '7px 8px', color: 'var(--text)' }}>{a.name}</td>
                                   <td style={{ padding: '7px 8px', color: 'var(--text-secondary)' }}>{a.category || '—'}</td>

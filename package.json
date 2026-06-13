@@ -1,30 +1,25 @@
 {
-  "name": "my-app",
+  "name": "futurely",
   "version": "0.1.0",
-  "private": true,
   "scripts": {
-    "dev": "concurrently -n \"next,backend\" -c \"cyan,green\" \"next dev\" \"cd backend && npm run dev\"",
-    "dev:web": "next dev",
-    "dev:backend": "cd backend && npm run dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "concurrently \"next dev\" \"cd backend && npm run dev\"",
+    "build": "next build && cd backend && npm run build",
+    "start": "next start & cd backend && npm start"
   },
   "dependencies": {
-    "expo": "^54.0.35",
-    "next": "16.2.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "@tailwindcss/postcss": "^4.3.1",
+    "concurrently": "^9.0.0",
+    "next": "^16.2.9",
+    "prisma": "^5.22.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwindcss": "^4.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "concurrently": "^10.0.3",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@types/node": "25.9.3",
+    "@types/react": "19.2.17",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "^16.2.9",
+    "typescript": "6.0.3"
   }
 }

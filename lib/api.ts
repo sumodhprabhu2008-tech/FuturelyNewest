@@ -78,6 +78,11 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<StudentData>('/api/students/me'),
+  updateProfile: (fields: { satScore?: number | null; actScore?: number | null; futureDecision?: string | null }) =>
+    request<{ id: number }>('/api/students/me/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(fields),
+    }),
   roadmap: () => request<{
     gradeLevel: number
     creditsCompleted: number
@@ -165,10 +170,12 @@ export const api = {
   portalSchedule: () =>
     request<{ schedule: Record<string, string>[] }>('/api/integrations/grades/schedule'),
 
-  portalClasswork: () =>
+  portalClasswork: (period?: string) =>
     request<{
       classes: Array<{ name: string; period: string; teacher: string; room: string; average: string | null; scores: Array<{ name: string; category: string; score: number | null; totalPoints: number | null; percentage: string; dateDue: string }> }>
-    }>('/api/integrations/grades/classwork'),
+      availablePeriods: string[]
+      currentPeriod: string
+    }>(`/api/integrations/grades/classwork${period ? `?period=${encodeURIComponent(period)}` : ''}`),
 
   portalReportCard: (period?: string) =>
     request<{
@@ -287,6 +294,14 @@ export const api = {
       { method: 'DELETE' },
     ),
 
+  // ── Notifications ─────────────────────────────────────────────────────────────
+
+  getNotifications: () =>
+    request<{ notifications: AppNotification[]; unreadCount: number }>('/api/notifications'),
+
+  markAllNotificationsRead: () =>
+    request<{ ok: boolean }>('/api/notifications/read-all', { method: 'POST' }),
+
   // ── Parent API ────────────────────────────────────────────────────────────────
 
   parentLinkStudent: (studentEmail: string) =>
@@ -397,3 +412,15 @@ export interface NormalizedCourse {
 
 // Kept for backwards compatibility — same shape as NormalizedCourse
 export type HacGrade = NormalizedCourse
+
+export interface AppNotification {
+  id: number
+  userId: number
+  fromUserId: number
+  type: 'FOLLOW' | 'LIKE' | 'COMMENT'
+  postId: number | null
+  preview: string | null
+  read: boolean
+  createdAt: string
+  sender: FeedUser
+}

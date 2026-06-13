@@ -1,43 +1,15 @@
-import { Router } from 'express'
-import { prisma } from '../lib/prisma'
+import { Router, Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
+import { broadcast, sendToUser } from '../index';
 
-const router = Router()
+const router = Router();
 
-// ── Posts ────────────────────────────────────────────────────────────────────
-
-/** Create a new post */
-router.post('/posts', async (req: any, res) => {
+/* ---------- Get Feed Posts ---------- */
+router.get('/posts', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const { body } = req.body as { body?: string }
-
-    if (!body || !body.trim()) {
-      res.status(400).json({ error: { message: 'Post body is required' } })
-      return
-    }
-
-    const post = await prisma.post.create({
-      data: { userId, body: body.trim() },
-      include: {
-        user: { select: { id: true, name: true, email: true, tag: true, tagColor: true } },
-        _count: { select: { likes: true, comments: true } },
-      },
-    })
-
-    res.json({ data: post })
-  } catch (err) {
-    console.error('[FEED] Create post error:', err)
-    res.status(500).json({ error: { message: 'Failed to create post' } })
-  }
-})
-
-/** Get feed posts (all users, with pagination) */
-router.get('/posts', async (req: any, res) => {
-  try {
-    const userId = req.userId as number
-    const page = Math.max(1, parseInt(req.query.page as string) || 1)
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20))
-    const skip = (page - 1) * limit
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
 
     const [posts, total] = await Promise.all([
       prisma.post.findMany({
@@ -51,13 +23,13 @@ router.get('/posts', async (req: any, res) => {
         },
       }),
       prisma.post.count(),
-    ])
+    ]);
 
-    const postsWithLiked = posts.map((p) => ({
+    const userId = (req as any).userId as number;
+    const postsWithLiked = posts.map(p => ({
       ...p,
-      likedByMe: p.likes.some((l) => l.userId === userId),
-      likes: undefined,
-    }))
+      likedByMe: p.likes.some(l => l.userId === userId),
+    }));
 
     res.json({
       data: {
@@ -67,205 +39,242 @@ router.get('/posts', async (req: any, res) => {
         pageSize: limit,
         hasMore: skip + limit < total,
       },
-    })
+    });
   } catch (err) {
-    console.error('[FEED] Get posts error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch posts' } })
+    res.status(500).json({ error: 'Failed to fetch posts' });
   }
-})
+});
 
-/** Get a single post with comments */
-router.get('/posts/:postId', async (req: any, res) => {
+/* ---------- Create New Post ---------- */
+router.post('/posts', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const postId = parseInt(req.params.postId)
+    const userId = (req as any).userId as number;
+    const { body } = req.body as { body?: string };
+    if (!body?.trim()) return res.status(400).json({ error: 'Body is required' });
 
-    const post = await prisma.post.findUnique({
-      where: { id: postId },
+    const post = await prisma.post.create({
+      data: { body: body.trim(), userId },
       include: {
         user: { select: { id: true, name: true, email: true, tag: true, tagColor: true } },
-        comments: {
-          orderBy: { createdAt: 'asc' },
-          include: { user: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
-        },
         likes: { select: { userId: true } },
         _count: { select: { likes: true, comments: true } },
       },
-    })
+    });
 
-    if (!post) {
-      res.status(404).json({ error: { message: 'Post not found' } })
-      return
-    }
+    // Broadcast new post
+    broadcast('NEW_POST', post);
+    res.json({ data: post });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create post' });
+  }
+});
 
-    res.json({
-      data: {
-        ...post,
-        likedByMe: post.likes.some((l) => l.userId === userId),
-        likes: undefined,
+/* ---------- Get Single Post ---------- */
+router.get('/posts/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const post = await prisma.post.findUnique({
+      where: { id },
+      include: {
+        comments: {
+          orderBy: { createdAt: 'asc' },
+          include: { user: { select: { id: true, name: true, email: true, tag: true } } },
+        },
+        user: { select: { id: true, name: true, email: true, tag: true, tagColor: true } },
+        likes: { select: { userId: true } },
+        _count: { select: { likes: true, comments: true } },
       },
-    })
+    });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    res.json({ data: post });
   } catch (err) {
-    console.error('[FEED] Get post error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch post' } })
+    res.status(500).json({ error: 'Failed to fetch post' });
   }
-})
+});
 
-/** Delete a post (owner only) */
-router.delete('/posts/:postId', async (req: any, res) => {
+/* ---------- Add Comment ---------- */
+router.post('/posts/:id/comments', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const postId = parseInt(req.params.postId)
-
-    const post = await prisma.post.findUnique({ where: { id: postId } })
-    if (!post) {
-      res.status(404).json({ error: { message: 'Post not found' } })
-      return
-    }
-    if (post.userId !== userId) {
-      res.status(403).json({ error: { message: 'Not authorized' } })
-      return
-    }
-
-    await prisma.post.delete({ where: { id: postId } })
-    res.json({ data: { deleted: true } })
-  } catch (err) {
-    console.error('[FEED] Delete post error:', err)
-    res.status(500).json({ error: { message: 'Failed to delete post' } })
-  }
-})
-
-// ── Likes ────────────────────────────────────────────────────────────────────
-
-/** Toggle like on a post */
-router.post('/posts/:postId/like', async (req: any, res) => {
-  try {
-    const userId = req.userId as number
-    const postId = parseInt(req.params.postId)
-
-    const existing = await prisma.like.findUnique({
-      where: { postId_userId: { postId, userId } },
-    })
-
-    if (existing) {
-      await prisma.like.delete({ where: { id: existing.id } })
-      res.json({ data: { liked: false } })
-    } else {
-      await prisma.like.create({ data: { postId, userId } })
-      res.json({ data: { liked: true } })
-    }
-  } catch (err) {
-    console.error('[FEED] Toggle like error:', err)
-    res.status(500).json({ error: { message: 'Failed to toggle like' } })
-  }
-})
-
-// ── Comments ─────────────────────────────────────────────────────────────────
-
-/** Add a comment to a post */
-router.post('/posts/:postId/comments', async (req: any, res) => {
-  try {
-    const userId = req.userId as number
-    const postId = parseInt(req.params.postId)
-    const { body } = req.body as { body?: string }
-
-    if (!body || !body.trim()) {
-      res.status(400).json({ error: { message: 'Comment body is required' } })
-      return
-    }
-
-    const post = await prisma.post.findUnique({ where: { id: postId } })
-    if (!post) {
-      res.status(404).json({ error: { message: 'Post not found' } })
-      return
-    }
+    const id = parseInt(req.params.id);
+    const userId = (req as any).userId as number;
+    const { body } = req.body as { body?: string };
+    if (!body?.trim()) return res.status(400).json({ error: 'Comment body is required' });
 
     const comment = await prisma.comment.create({
-      data: { postId, userId, body: body.trim() },
-      include: { user: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
-    })
+      data: { body: body.trim(), postId: id, userId },
+      include: { user: { select: { id: true, name: true, email: true, tag: true } } },
+    });
 
-    res.json({ data: comment })
-  } catch (err) {
-    console.error('[FEED] Add comment error:', err)
-    res.status(500).json({ error: { message: 'Failed to add comment' } })
-  }
-})
+    broadcast('NEW_COMMENT', { postId: id, comment });
 
-// ── Follows ──────────────────────────────────────────────────────────────────
-
-/** Follow a user */
-router.post('/users/:targetUserId/follow', async (req: any, res) => {
-  try {
-    const userId = req.userId as number
-    const targetUserId = parseInt(req.params.targetUserId)
-
-    if (userId === targetUserId) {
-      res.status(400).json({ error: { message: 'Cannot follow yourself' } })
-      return
+    // Notify post owner if someone else commented
+    const post = await prisma.post.findUnique({ where: { id }, select: { userId: true } });
+    if (post && post.userId !== userId) {
+      const notif = await prisma.notification.create({
+        data: { userId: post.userId, fromUserId: userId, type: 'COMMENT', postId: id, preview: body.trim().slice(0, 80) },
+        include: { sender: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
+      });
+      sendToUser(post.userId, 'NOTIFICATION', notif);
     }
 
-    const existing = await prisma.follow.findUnique({
-      where: { followerId_followingId: { followerId: userId, followingId: targetUserId } },
-    })
+    res.json({ data: comment });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
 
-    if (existing) {
-      await prisma.follow.delete({ where: { id: existing.id } })
-      res.json({ data: { following: false } })
+/* ---------- Toggle Like ---------- */
+router.post('/posts/:id/like', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const userId = (req as any).userId as number;
+
+    // Use findFirst since we don't have a composite unique ID in the schema for Like
+    const existingLike = await prisma.like.findFirst({
+      where: { userId, postId: id },
+    });
+
+    let liked = false;
+    if (existingLike) {
+      await prisma.like.delete({ where: { id: existingLike.id } });
     } else {
-      await prisma.follow.create({ data: { followerId: userId, followingId: targetUserId } })
-      res.json({ data: { following: true } })
+      await prisma.like.create({ data: { userId, postId: id } });
+      liked = true;
     }
-  } catch (err) {
-    console.error('[FEED] Toggle follow error:', err)
-    res.status(500).json({ error: { message: 'Failed to toggle follow' } })
-  }
-})
 
-/** Get followers of a user */
-router.get('/users/:targetUserId/followers', async (req: any, res) => {
-  try {
-    const targetUserId = parseInt(req.params.targetUserId)
+    const likedPost = await prisma.post.findUnique({
+      where: { id },
+      include: { _count: { select: { likes: true } } },
+    });
 
-    const followers = await prisma.follow.findMany({
-      where: { followingId: targetUserId },
-      include: { follower: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
-    })
+    broadcast('LIKE_UPDATE', { postId: id, liked, count: likedPost?._count.likes || 0 });
 
-    res.json({ data: followers.map((f) => f.follower) })
-  } catch (err) {
-    console.error('[FEED] Get followers error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch followers' } })
-  }
-})
-
-/** Get users that a user follows */
-router.get('/users/:targetUserId/following', async (req: any, res) => {
-  try {
-    const targetUserId = parseInt(req.params.targetUserId)
-
-    const following = await prisma.follow.findMany({
-      where: { followerId: targetUserId },
-      include: { following: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
-    })
-
-    res.json({ data: following.map((f) => f.following) })
-  } catch (err) {
-    console.error('[FEED] Get following error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch following' } })
-  }
-})
-
-/** Search users by name or email */
-router.get('/users/search', async (req: any, res) => {
-  try {
-    const userId = req.userId as number
-    const q = (req.query.q as string || '').trim()
-
-    if (!q) {
-      res.json({ data: [] })
-      return
+    // Notify post owner when someone likes (not when un-liking, not self-like)
+    if (liked && likedPost && likedPost.userId !== userId) {
+      const notif = await prisma.notification.create({
+        data: { userId: likedPost.userId, fromUserId: userId, type: 'LIKE', postId: id },
+        include: { sender: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
+      });
+      sendToUser(likedPost.userId, 'NOTIFICATION', notif);
     }
+
+    res.json({ data: { liked, count: likedPost?._count.likes || 0 } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle like' });
+  }
+});
+
+/* ---------- Delete Post ---------- */
+router.delete('/posts/:id', async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    const userId = (req as any).userId as number;
+    const post = await prisma.post.findUnique({ where: { id } });
+    if (!post || post.userId !== userId) return res.status(403).json({ error: 'Unauthorized' });
+
+    await prisma.post.delete({ where: { id } });
+    broadcast('POST_DELETED', { postId: id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete post' });
+  }
+});
+
+/* ---------- Get User Posts ---------- */
+router.get('/user/posts', async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.query.userId as string);
+    const posts = await prisma.post.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        likes: { select: { userId: true } },
+        _count: { select: { likes: true, comments: true } },
+      },
+    });
+    res.json({ posts });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user posts' });
+  }
+});
+
+/* ---------- Get Current User Profile ---------- */
+router.get('/user/profile', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as number;
+    const profile = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        _count: { select: { followers: true, following: true, posts: true } },
+      },
+    });
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+
+    const totalLikes = await prisma.like.count({
+      where: { post: { userId } },
+    });
+
+    res.json({ ...profile, totalLikes });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+/* ---------- Get User Profile by ID ---------- */
+router.get('/user/profile/:id', async (req: Request, res: Response) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const userId = (req as any).userId as number;
+    const profile = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: {
+        _count: { select: { followers: true, following: true, posts: true } },
+      },
+    });
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+
+    const totalLikes = await prisma.like.count({
+      where: { post: { userId: targetId } },
+    });
+
+    const isFollowing = await prisma.follow.findFirst({
+      where: { followerId: userId, followingId: targetId },
+    });
+
+    res.json({ ...profile, totalLikes, isFollowing: !!isFollowing });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+/* ---------- Toggle Follow ---------- */
+router.post('/user/follow', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as number;
+    const { targetId } = req.body as { targetId: number };
+    const existing = await prisma.follow.findFirst({
+      where: { followerId: userId, followingId: targetId },
+    });
+
+    let following = false;
+    if (existing) {
+      await prisma.follow.delete({ where: { id: existing.id } });
+    } else {
+      await prisma.follow.create({ data: { followerId: userId, followingId: targetId } });
+      following = true;
+    }
+    res.json({ following });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to toggle follow' });
+  }
+});
+
+/* ---------- Search Users ---------- */
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as number;
+    const q = (req.query.q as string || '').trim();
+    if (!q) return res.json({ data: [] });
 
     const users = await prisma.user.findMany({
       where: {
@@ -280,75 +289,111 @@ router.get('/users/search', async (req: any, res) => {
           },
         ],
       },
-      select: { id: true, name: true, email: true, tag: true, tagColor: true },
       take: 20,
-    })
-
-    res.json({ data: users })
+    });
+    res.json({ data: users });
   } catch (err) {
-    console.error('[FEED] Search users error:', err)
-    res.status(500).json({ error: { message: 'Failed to search users' } })
+    res.status(500).json({ error: 'Search failed' });
   }
-})
+});
 
-/** Get user profile with follow counts and total likes */
-router.get('/users/:targetUserId/profile', async (req: any, res) => {
+/* ---------- Admin: Update User Tag ---------- */
+router.put('/user/:id/tag', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const targetUserId = parseInt(req.params.targetUserId)
+    const userId = (req as any).userId as number;
+    const targetId = parseInt(req.params.id);
+    const { tag, tagColor } = req.body as { tag?: string; tagColor?: string };
 
-    const user = await prisma.user.findUnique({
-      where: { id: targetUserId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        tag: true,
-        tagColor: true,
-        role: true,
-        _count: { select: { followers: true, following: true, posts: true } },
-      },
-    })
+    const admin = await prisma.user.findUnique({ where: { id: userId } });
+    if (admin?.role !== 'ADMIN') return res.status(403).json({ error: 'Unauthorized' });
 
-    if (!user) {
-      res.status(404).json({ error: { message: 'User not found' } })
-      return
-    }
-
-    const isFollowing = await prisma.follow.findUnique({
-      where: { followerId_followingId: { followerId: userId, followingId: targetUserId } },
-    })
-
-    const likesAggregate = await prisma.like.aggregate({
-      where: { post: { userId: targetUserId } },
-      _count: true,
-    })
-
-    res.json({
-      data: {
-        ...user,
-        isFollowing: Boolean(isFollowing),
-        totalLikes: likesAggregate._count,
-      },
-    })
+    const updated = await prisma.user.update({
+      where: { id: targetId },
+      data: { tag, tagColor },
+    });
+    res.json({ data: updated });
   } catch (err) {
-    console.error('[FEED] Get user profile error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch user profile' } })
+    res.status(500).json({ error: 'Failed to update tag' });
   }
-})
+});
 
-/** Get posts by a specific user */
-router.get('/users/:targetUserId/posts', async (req: any, res) => {
+/* ---------- Admin: Reset User Tag ---------- */
+router.delete('/user/:id/tag', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const targetUserId = parseInt(req.params.targetUserId)
-    const page = Math.max(1, parseInt(req.query.page as string) || 1)
-    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20))
-    const skip = (page - 1) * limit
+    const userId = (req as any).userId as number;
+    const targetId = parseInt(req.params.id);
+    const admin = await prisma.user.findUnique({ where: { id: userId } });
+    if (admin?.role !== 'ADMIN') return res.status(403).json({ error: 'Unauthorized' });
 
+    const updated = await prisma.user.update({
+      where: { id: targetId },
+      data: { tag: 'Student', tagColor: 'grey' },
+    });
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reset tag' });
+  }
+});
+
+// ── /users/* routes — new URL structure matching lib/api.ts ──────────────────
+// These mirror the old /user/* routes but use the URL shape the frontend expects.
+
+/* ---------- Users: Search ---------- */
+router.get('/users/search', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as number;
+    const q = (req.query.q as string || '').trim();
+    if (!q) return res.json({ data: [] });
+    const users = await prisma.user.findMany({
+      where: {
+        AND: [
+          { id: { not: userId } },
+          { OR: [
+            { name: { contains: q } },
+            { email: { contains: q } },
+            { tag: { contains: q } },
+          ]},
+        ],
+      },
+      take: 20,
+    });
+    res.json({ data: users });
+  } catch (err) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
+/* ---------- Users: Get Profile by ID ---------- */
+router.get('/users/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const userId = (req as any).userId as number;
+    const profile = await prisma.user.findUnique({
+      where: { id: targetId },
+      include: { _count: { select: { followers: true, following: true, posts: true } } },
+    });
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+    const totalLikes = await prisma.like.count({ where: { post: { userId: targetId } } });
+    const isFollowing = await prisma.follow.findFirst({
+      where: { followerId: userId, followingId: targetId },
+    });
+    res.json({ data: { ...profile, totalLikes, isFollowing: !!isFollowing } });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+/* ---------- Users: Get Posts by User (paginated) ---------- */
+router.get('/users/:id/posts', async (req: Request, res: Response) => {
+  try {
+    const targetId = parseInt(req.params.id);
+    const requesterId = (req as any).userId as number;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string) || 20));
+    const skip = (page - 1) * limit;
     const [posts, total] = await Promise.all([
       prisma.post.findMany({
-        where: { userId: targetUserId },
+        where: { userId: targetId },
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -358,94 +403,79 @@ router.get('/users/:targetUserId/posts', async (req: any, res) => {
           _count: { select: { likes: true, comments: true } },
         },
       }),
-      prisma.post.count({ where: { userId: targetUserId } }),
-    ])
-
-    const postsWithLiked = posts.map((p) => ({
+      prisma.post.count({ where: { userId: targetId } }),
+    ]);
+    const postsWithLiked = posts.map(p => ({
       ...p,
-      likedByMe: p.likes.some((l) => l.userId === userId),
-      likes: undefined,
-    }))
-
-    res.json({
-      data: {
-        posts: postsWithLiked,
-        total,
-        page,
-        pageSize: limit,
-        hasMore: skip + limit < total,
-      },
-    })
+      likedByMe: p.likes.some((l: { userId: number }) => l.userId === requesterId),
+    }));
+    res.json({ data: { posts: postsWithLiked, total, page, pageSize: limit, hasMore: skip + limit < total } });
   } catch (err) {
-    console.error('[FEED] Get user posts error:', err)
-    res.status(500).json({ error: { message: 'Failed to fetch user posts' } })
+    res.status(500).json({ error: 'Failed to fetch user posts' });
   }
-})
+});
 
-// ── Admin Tag Management ─────────────────────────────────────────────────────
-
-/** Award a tag to a user (admin/developer only) */
-router.put('/users/:targetUserId/tag', async (req: any, res) => {
+/* ---------- Users: Toggle Follow ---------- */
+router.post('/users/:id/follow', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const targetUserId = parseInt(req.params.targetUserId)
-
-    // Check if the requesting user is an admin/developer
-    const adminUser = await prisma.user.findUnique({ where: { id: userId } })
-    if (!adminUser || adminUser.role !== 'ADMIN') {
-      res.status(403).json({ error: { message: 'Only admins can award tags' } })
-      return
+    const userId = (req as any).userId as number;
+    const targetId = parseInt(req.params.id);
+    const existing = await prisma.follow.findFirst({
+      where: { followerId: userId, followingId: targetId },
+    });
+    let following = false;
+    if (existing) {
+      await prisma.follow.delete({ where: { id: existing.id } });
+    } else {
+      await prisma.follow.create({ data: { followerId: userId, followingId: targetId } });
+      following = true;
     }
 
-    const { tag, tagColor } = req.body as { tag?: string; tagColor?: string }
-
-    if (!tag || !tag.trim()) {
-      res.status(400).json({ error: { message: 'Tag is required' } })
-      return
+    // Notify the followed user (only on new follow, not unfollow)
+    if (following) {
+      const notif = await prisma.notification.create({
+        data: { userId: targetId, fromUserId: userId, type: 'FOLLOW' },
+        include: { sender: { select: { id: true, name: true, email: true, tag: true, tagColor: true } } },
+      });
+      sendToUser(targetId, 'NOTIFICATION', notif);
     }
 
-    const cleanTag = tag.replace(/[[\]]/g, '').trim().slice(0, 20)
-    const cleanColor = tagColor ? tagColor.replace(/[[\]]/g, '').trim().slice(0, 20) : undefined
-
-    const updated = await prisma.user.update({
-      where: { id: targetUserId },
-      data: {
-        tag: cleanTag,
-        ...(cleanColor ? { tagColor: cleanColor } : {}),
-      },
-      select: { id: true, name: true, email: true, tag: true, tagColor: true },
-    })
-
-    res.json({ data: updated })
+    res.json({ data: { following } });
   } catch (err) {
-    console.error('[FEED] Award tag error:', err)
-    res.status(500).json({ error: { message: 'Failed to award tag' } })
+    res.status(500).json({ error: 'Failed to toggle follow' });
   }
-})
+});
 
-/** Reset a user's tag back to default [Student] (admin/developer only) */
-router.delete('/users/:targetUserId/tag', async (req: any, res) => {
+/* ---------- Users: Award Tag (admin) ---------- */
+router.put('/users/:id/tag', async (req: Request, res: Response) => {
   try {
-    const userId = req.userId as number
-    const targetUserId = parseInt(req.params.targetUserId)
+    const userId = (req as any).userId as number;
+    const targetId = parseInt(req.params.id);
+    const { tag, tagColor } = req.body as { tag?: string; tagColor?: string };
+    const admin = await prisma.user.findUnique({ where: { id: userId } });
+    if (admin?.role !== 'ADMIN') return res.status(403).json({ error: 'Unauthorized' });
+    const updated = await prisma.user.update({ where: { id: targetId }, data: { tag, tagColor } });
+    res.json({ data: updated });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update tag' });
+  }
+});
 
-    const adminUser = await prisma.user.findUnique({ where: { id: userId } })
-    if (!adminUser || adminUser.role !== 'ADMIN') {
-      res.status(403).json({ error: { message: 'Only admins can reset tags' } })
-      return
-    }
-
+/* ---------- Users: Reset Tag (admin) ---------- */
+router.delete('/users/:id/tag', async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId as number;
+    const targetId = parseInt(req.params.id);
+    const admin = await prisma.user.findUnique({ where: { id: userId } });
+    if (admin?.role !== 'ADMIN') return res.status(403).json({ error: 'Unauthorized' });
     const updated = await prisma.user.update({
-      where: { id: targetUserId },
+      where: { id: targetId },
       data: { tag: 'Student', tagColor: 'grey' },
-      select: { id: true, name: true, email: true, tag: true, tagColor: true },
-    })
-
-    res.json({ data: updated })
+    });
+    res.json({ data: updated });
   } catch (err) {
-    console.error('[FEED] Reset tag error:', err)
-    res.status(500).json({ error: { message: 'Failed to reset tag' } })
+    res.status(500).json({ error: 'Failed to reset tag' });
   }
-})
+});
 
-export default router
+export default router;

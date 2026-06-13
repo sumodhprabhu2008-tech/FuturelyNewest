@@ -24,6 +24,16 @@ setInterval(() => {
   }
 }, 15 * 60 * 1000).unref()
 
+function normalizeBaseUrl(url: string): string {
+  try {
+    const u = new URL(url.trim())
+    return `${u.protocol}//${u.host}/`
+  } catch {
+    const m = url.trim().match(/^(https?:\/\/[^/?#]+)/)
+    return m ? `${m[1]}/` : url
+  }
+}
+
 export function saveSession(
   userId: number,
   systemType: SchoolSystemType,
@@ -38,7 +48,7 @@ export function saveSession(
   store.set(token, {
     sessionData,
     systemType,
-    baseUrl,
+    baseUrl: normalizeBaseUrl(baseUrl),
     userId,
     createdAt: Date.now(),
     expiresAt: Date.now() + TTL_MS,

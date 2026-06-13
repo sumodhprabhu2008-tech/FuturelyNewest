@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+import { api } from '../../../../lib/api'
 
 interface IPRCourse {
   name: string
@@ -28,13 +27,6 @@ function avgColor(avg: string): string {
   return '#EF4444'
 }
 
-function apiFetch<T>(path: string): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('ns_token') : null
-  return fetch(`${BASE}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  }).then(r => r.json())
-}
-
 export default function ProgressReportPage() {
   const router = useRouter()
   const [data, setData] = useState<IPRData | null>(null)
@@ -44,14 +36,10 @@ export default function ProgressReportPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    apiFetch<{ data?: IPRData; error?: { message?: string } | string }>('/api/integrations/grades/progress-report')
+    api.portalProgressReport()
       .then(json => {
-        if (json.error) {
-          const msg = typeof json.error === 'string' ? json.error : (json.error?.message ?? 'Failed to load')
-          setError(msg); return
-        }
-        setData(json.data ?? null)
-        setSelectedDate(json.data?.currentDate ?? json.data?.availableDates?.[0] ?? '')
+        setData(json)
+        setSelectedDate(json.currentDate ?? json.availableDates?.[0] ?? '')
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load progress report'))
       .finally(() => setLoading(false))
@@ -60,17 +48,11 @@ export default function ProgressReportPage() {
   function handleDateChange(date: string) {
     setSelectedDate(date)
     setDateLoading(true)
-    apiFetch<{ data?: IPRData; error?: { message?: string } | string }>(
-      `/api/integrations/grades/progress-report?date=${encodeURIComponent(date)}`
-    )
+    api.portalProgressReport(date)
       .then(json => {
-        if (json.error) {
-          const msg = typeof json.error === 'string' ? json.error : (json.error?.message ?? 'Failed to load')
-          setError(msg); return
-        }
         setData(prev => prev
-          ? { ...prev, courses: json.data?.courses ?? [], currentDate: date }
-          : json.data ?? null)
+          ? { ...prev, courses: json.courses ?? [], currentDate: date }
+          : json)
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setDateLoading(false))

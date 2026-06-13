@@ -491,6 +491,31 @@ export async function loginHAC(
   return sessionToken
 }
 
+// ── ASP.NET ScriptManager delta (UpdatePanel AJAX) parser ─────────────────────
+// HAC pages that use UpdatePanel return a delta string, not full HTML.
+// Format: len|type|id|content| ... repeated
+function parseScriptManagerDelta(delta: string): string {
+  let pos = 0
+  let bestHtml = ''
+  while (pos < delta.length) {
+    const p1 = delta.indexOf('|', pos)
+    if (p1 === -1) break
+    const len = parseInt(delta.substring(pos, p1))
+    if (isNaN(len) || len < 0) break
+    const p2 = delta.indexOf('|', p1 + 1)
+    if (p2 === -1) break
+    const type = delta.substring(p1 + 1, p2)
+    const p3 = delta.indexOf('|', p2 + 1)
+    if (p3 === -1) break
+    const contentStart = p3 + 1
+    if (contentStart + len > delta.length) break
+    const content = delta.substring(contentStart, contentStart + len)
+    if (type === 'updatePanel' && content.length > bestHtml.length) bestHtml = content
+    pos = contentStart + len + 1
+  }
+  return bestHtml
+}
+
 // ── Scraping helpers ───────────────────────────────────────────────────────────
 
 /**
@@ -541,7 +566,13 @@ function extractAverage($el: cheerio.Cheerio<AnyNode>, $: cheerio.CheerioAPI): s
 
 // ── Data fetchers ──────────────────────────────────────────────────────────────
 
-export async function getGrades(sessionToken: string): Promise<HACClass[]> {
+export interface HACGradesResult {
+  classes: HACClass[]
+  availablePeriods: string[]
+  currentPeriod: string
+}
+
+export async function getGrades(sessionToken: string, period?: string): Promise<HACGradesResult> {
   const stored = getSessionByToken(sessionToken)
   if (!stored) throw new Error('School session expired — please log in again')
 
@@ -573,37 +604,33 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
     throw new Error('School session expired — please log in again')
   }
 
-  let pageHtml = res.data as string
-  const $ = cheerio.load(pageHtml)
+  const outerHtml = res.data as string
+  const $outer = cheerio.load(outerHtml)
 
-  // Katy ISD HAC (and similar PowerSchool districts) load the actual
-  // classwork content inside an iframe.  If the outer page has no assignment
-  // data but does reference an iframe src, fetch that URL to get the real data.
-  const iframeSrc = $('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Assignment"]')
-    .attr('src')
+  // ── Step 1: Resolve the real content page (outer or iframe) ───────────────
+  // Katy ISD HAC loads classwork (including the period dropdown) inside an
+  // iframe. We must fetch the iframe first so we can find the dropdown there.
+  let contentHtml = outerHtml
+  let contentUrl  = classworkUrl
 
-  if (iframeSrc && ($('.AssignmentClass').length === 0 && $('table').length === 0)) {
-    const iframeUrl = iframeSrc.startsWith('http')
+  const iframeSrc = $outer('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Assignment"]').attr('src')
+  if (iframeSrc && ($outer('.AssignmentClass').length === 0 && $outer('table').length === 0)) {
+    contentUrl = iframeSrc.startsWith('http')
       ? iframeSrc
       : new URL(iframeSrc, classworkUrl).toString()
 
-    console.log('[HAC CLIENT] Outer page has no grade tables — fetching iframe content:', iframeUrl)
-
+    console.log('[HAC CLIENT] Outer page is a shell — fetching iframe content:', contentUrl)
     try {
       await sleep(400 + Math.random() * 300)
-      const iframeRes = await http.get(iframeUrl, {
+      const iframeRes = await http.get(contentUrl, {
         headers: {
           Referer: classworkUrl,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'X-Requested-With': 'XMLHttpRequest',
         },
       })
-
       if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) {
-        pageHtml = iframeRes.data
-        console.log('[HAC CLIENT] Iframe content fetched:', { htmlLength: pageHtml.length })
-      } else {
-        console.warn('[HAC CLIENT] Iframe content too short or empty — using outer page')
+        contentHtml = iframeRes.data
+        console.log('[HAC CLIENT] Iframe content fetched:', { htmlLength: contentHtml.length })
       }
     } catch (iframeErr) {
       console.warn('[HAC CLIENT] Failed to fetch iframe content:',
@@ -611,9 +638,126 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
     }
   }
 
-  const $final = cheerio.load(pageHtml)
+  let $content = cheerio.load(contentHtml)
 
-  dumpDebugHtml('classwork', pageHtml)
+  // ── Step 2: Extract grading period dropdown from the content page ──────────
+  // Use SPECIFIC select selectors to avoid matching hidden inputs that share the same ID pattern.
+  // We track both display text and raw value so the POST sends the right value to HAC.
+  const PERIOD_SELECT_IDS = [
+    'select#plnMain_ddlReportCardRuns',
+    'select#plnMain_ddlGradePeriod',
+    'select[id*="ddlReportCardRuns"]:not([type="hidden"])',
+    'select[id*="ddlGradePeriod"]:not([type="hidden"])',
+    'select[id*="ddlReportPeriod"]:not([type="hidden"])',
+    'select[id*="ddlMarkingPeriod"]:not([type="hidden"])',
+    'select[id*="ddlCycle"]:not([type="hidden"])',
+    'select[id*="ddlGradesPeriod"]:not([type="hidden"])',
+    'select[id*="ddlSixWeeks"]:not([type="hidden"])',
+  ]
+  const availablePeriods: string[] = []
+  // Map display text → HAC option value (e.g., "1" → "1-2026")
+  const periodValueMap: Record<string, string> = {}
+  let currentPeriod = ''
+  let periodDropdownName = ''
+  let periodDropdownEl: string | null = null
+
+  for (const sel of PERIOD_SELECT_IDS) {
+    const $sel = $content(sel).first()
+    if ($sel.length === 0) continue
+    const opts: Array<{ text: string; value: string; selected: boolean }> = []
+    $sel.find('option').each((_j, opt) => {
+      const text  = $content(opt).text().trim()
+      const value = ($content(opt).attr('value') ?? text).trim()
+      const sel_  = $content(opt).attr('selected') !== undefined
+      if (text) opts.push({ text, value, selected: sel_ })
+    })
+    if (opts.length > 0) {
+      opts.forEach(o => {
+        availablePeriods.push(o.text)
+        periodValueMap[o.text] = o.value
+        if (o.selected || !currentPeriod) currentPeriod = o.text
+      })
+      periodDropdownName = $sel.attr('name') ?? ''
+      periodDropdownEl   = sel
+      break
+    }
+  }
+
+  // Fallback: scan ALL <select> for a grading-period-like dropdown
+  if (availablePeriods.length === 0) {
+    $content('select').each((_i, sel) => {
+      const opts: Array<{ text: string; value: string; selected: boolean }> = []
+      $content(sel).find('option').each((_j, opt) => {
+        const text  = $content(opt).text().trim()
+        const value = ($content(opt).attr('value') ?? text).trim()
+        const sel_  = $content(opt).attr('selected') !== undefined
+        if (text) opts.push({ text, value, selected: sel_ })
+      })
+      const looksLikePeriods = opts.length > 1 && opts.some(o =>
+        /6\s*w(ee)?k|six\s*week|semester|quarter|marking|cycle|grading\s*period|\d(st|nd|rd|th)\s*period/i.test(o.text)
+      )
+      if (looksLikePeriods) {
+        opts.forEach(o => {
+          availablePeriods.push(o.text)
+          periodValueMap[o.text] = o.value
+          if (o.selected || !currentPeriod) currentPeriod = o.text
+        })
+        periodDropdownName = $content(sel).attr('name') ?? ''
+        return false
+      }
+    })
+  }
+
+  if (availablePeriods.length === 0) {
+    const allSelects: Array<{ id: string; name: string; options: string[] }> = []
+    $content('select').each((_i, sel) => {
+      const opts: string[] = []
+      $content(sel).find('option').each((_j, opt) => { opts.push($content(opt).text().trim()) })
+      allSelects.push({ id: $content(sel).attr('id') ?? '', name: $content(sel).attr('name') ?? '', options: opts })
+    })
+    console.log('[HAC CLIENT] No period dropdown found. All <select> elements:', JSON.stringify(allSelects))
+  }
+
+  console.log('[HAC CLIENT] Grade periods found:', availablePeriods, 'current:', currentPeriod, 'dropdown:', periodDropdownName)
+
+  // ── Step 3: Switch period via ASP.NET postback if requested ───────────────
+  if (period && availablePeriods.length > 0 && availablePeriods.includes(period) && period !== currentPeriod) {
+    // Use the value map built during option parsing (e.g., "1" → "1-2026" for Katy ISD)
+    const periodValue = periodValueMap[period] ?? period
+    // Katy ISD HAC uses a "Refresh View" button for full-page postback — NOT a dropdown onChange event.
+    // We must POST with btnRefreshView as the event target and include the desired period as the select value.
+    const dropdownName = periodDropdownName || 'ctl00$plnMain$ddlReportCardRuns'
+    const viewState       = ($content('[id="__VIEWSTATE"]').val() as string) ?? ''
+    const eventValidation = ($content('[id="__EVENTVALIDATION"]').val() as string) ?? ''
+    const vsGenerator     = ($content('[id="__VIEWSTATEGENERATOR"]').val() as string) ?? ''
+
+    console.log('[HAC CLIENT] Switching grade period:', { period, periodValue, dropdownName, viewStateLen: viewState.length })
+
+    const formData = new URLSearchParams({
+      __EVENTTARGET: 'ctl00$plnMain$btnRefreshView',
+      __EVENTARGUMENT: '',
+      __VIEWSTATE: viewState,
+      __EVENTVALIDATION: eventValidation,
+      __VIEWSTATEGENERATOR: vsGenerator,
+      [dropdownName]: periodValue,
+    })
+    await sleep(500 + Math.random() * 300)
+    const postRes = await http.post(contentUrl, formData.toString(), {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Referer: contentUrl,
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+    })
+    contentHtml = postRes.data as string
+    console.log('[HAC CLIENT] Period switch response len:', contentHtml.length, 'isHtml:', contentHtml.trim().startsWith('<'))
+    $content = cheerio.load(contentHtml)
+    currentPeriod = period
+  }
+
+  const $final = cheerio.load(contentHtml)
+
+  dumpDebugHtml('classwork', contentHtml)
 
   // Log page structure to understand the HTML
   console.log('[HAC CLIENT] Classwork page structure check:', {
@@ -633,7 +777,7 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
   if ($final('.AssignmentClass').length > 0) {
     console.log('[HAC CLIENT] Using Strategy 1: .AssignmentClass')
     $final('.AssignmentClass').each((_i, el) => {
-      classes.push(parseClassBlock($, $(el)))
+      classes.push(parseClassBlock($final, $final(el)))
     })
   }
 
@@ -641,20 +785,18 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
   else if ($final('[id*="rptAssigClasses"]').length > 0 || $final('[id*="plnMain_rptAssig"]').length > 0) {
     console.log('[HAC CLIENT] Using Strategy 2: rptAssigClasses pattern')
     $final('[id*="rptAssigClasses"] > div, [id*="plnMain_rptAssig"] > div').each((_i, el) => {
-      classes.push(parseClassBlock($, $(el)))
+      classes.push(parseClassBlock($final, $final(el)))
     })
   }
 
   // Strategy 3: Look for class heading + table pairs anywhere on the page
   else {
     console.log('[HAC CLIENT] Using Strategy 3: generic heading + table scan')
-    // Find all elements that look like course headers
     $final('a[id*="lnkCourse"], span[id*="lblHeading"], h3[class*="course"], .sg-header-heading').each((_i, heading) => {
       const $heading = $final(heading)
       const name = $heading.text().replace(/\s*[-–]\s*Period\s*\d+.*$/i, '').trim()
       if (!name) return
 
-      // Find the next table after this heading
       const $table = $heading.closest('div, td').find('table').first()
       if ($table.length === 0) return
 
@@ -663,7 +805,7 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
 
       const scores: HACScore[] = []
       $table.find('tr').each((_j, row) => {
-        const cells = $(row).find('td')
+        const cells = $final(row).find('td')
         if (cells.length < 2) return
         const aName = cells.eq(0).text().trim()
         if (!aName || aName.toLowerCase() === 'assignment') return
@@ -682,7 +824,7 @@ export async function getGrades(sessionToken: string): Promise<HACClass[]> {
   }
 
   console.log('[HAC CLIENT] Parsed', classes.length, 'classes from classwork page')
-  return classes
+  return { classes, availablePeriods, currentPeriod }
 }
 
 // Helper: parse a single class block element into a HACClass
@@ -774,10 +916,25 @@ export async function getTranscript(sessionToken: string): Promise<HACTranscript
   const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400) // 0.8–1.2s delay
-  const res = await http.get(`${origin}HomeAccess/Grades/Transcript`, {
+  const transcriptUrl = `${origin}HomeAccess/Grades/Transcript`
+  const res = await http.get(transcriptUrl, {
     headers: { Referer: `${origin}HomeAccess/Home.aspx` },
   })
-  const transcriptHtml = res.data as string
+  const outerTransHtml = res.data as string
+  const $outerTrans = cheerio.load(outerTransHtml)
+  let transcriptHtml = outerTransHtml
+
+  const transiframeSrc = $outerTrans('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Transcript"]').attr('src')
+  if (transiframeSrc && $outerTrans('table').length === 0) {
+    const transIframeUrl = transiframeSrc.startsWith('http') ? transiframeSrc : new URL(transiframeSrc, transcriptUrl).toString()
+    console.log('[TRANSCRIPT] Shell page — fetching iframe:', transIframeUrl)
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(transIframeUrl, { headers: { Referer: transcriptUrl } })
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) transcriptHtml = iframeRes.data
+    } catch (e) { console.warn('[TRANSCRIPT] iframe fetch failed:', e instanceof Error ? e.message : String(e)) }
+  }
+
   dumpDebugHtml('transcript', transcriptHtml)
   const $ = cheerio.load(transcriptHtml)
 
@@ -954,11 +1111,26 @@ export async function getSchedule(sessionToken: string): Promise<object[]> {
   const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400)
-  const res = await http.get(`${origin}HomeAccess/Classes/Schedule`, {
+  const scheduleUrl = `${origin}HomeAccess/Classes/Schedule`
+  const res = await http.get(scheduleUrl, {
     headers: { Referer: `${origin}HomeAccess/Home.aspx` },
   })
 
-  const html = res.data as string
+  const outerSchedHtml = res.data as string
+  const $outerSched = cheerio.load(outerSchedHtml)
+  let html = outerSchedHtml
+
+  const schediframeSrc = $outerSched('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Schedule"]').attr('src')
+  if (schediframeSrc && $outerSched('table').length === 0) {
+    const schedIframeUrl = schediframeSrc.startsWith('http') ? schediframeSrc : new URL(schediframeSrc, scheduleUrl).toString()
+    console.log('[SCHEDULE] Shell page — fetching iframe:', schedIframeUrl)
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(schedIframeUrl, { headers: { Referer: scheduleUrl } })
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) html = iframeRes.data
+    } catch (e) { console.warn('[SCHEDULE] iframe fetch failed:', e instanceof Error ? e.message : String(e)) }
+  }
+
   dumpDebugHtml('schedule', html)
   const $ = cheerio.load(html)
 
@@ -1049,17 +1221,33 @@ export async function getReportCard(sessionToken: string, period?: string): Prom
   const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400)
-  const initialRes = await http.get(`${origin}HomeAccess/Grades/ReportCard`, {
+  const reportCardUrl = `${origin}HomeAccess/Grades/ReportCard`
+  const initialRes = await http.get(reportCardUrl, {
     headers: { Referer: `${origin}HomeAccess/Home.aspx` },
   })
 
-  let html = initialRes.data as string
+  const outerRCHtml = initialRes.data as string
+  const $outerRC = cheerio.load(outerRCHtml)
+  let html = outerRCHtml
+  let rcContentUrl = reportCardUrl
+
+  const rciframeSrc = $outerRC('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="ReportCard"]').attr('src')
+  if (rciframeSrc && $outerRC('table').length === 0) {
+    rcContentUrl = rciframeSrc.startsWith('http') ? rciframeSrc : new URL(rciframeSrc, reportCardUrl).toString()
+    console.log('[REPORT CARD] Shell page — fetching iframe:', rcContentUrl)
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(rcContentUrl, { headers: { Referer: reportCardUrl } })
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) html = iframeRes.data
+    } catch (e) { console.warn('[REPORT CARD] iframe fetch failed:', e instanceof Error ? e.message : String(e)) }
+  }
+
   let $ = cheerio.load(html)
 
-  // Extract reporting period dropdown options (#plnMain_ddlRCRuns)
+  // Extract reporting period dropdown options
   const reportingPeriods: string[] = []
   let currentPeriod = ''
-  $('[id*="ddlRCRuns"] option, #plnMain_ddlRCRuns option').each((_i, opt) => {
+  $('[id*="ddlRCRuns"] option, #plnMain_ddlRCRuns option, [id*="ddlReportCardRuns"] option').each((_i, opt) => {
     const text = $(opt).text().trim()
     if (text) {
       reportingPeriods.push(text)
@@ -1070,10 +1258,10 @@ export async function getReportCard(sessionToken: string, period?: string): Prom
   // If a specific period is requested, POST back to HAC selecting it
   if (period && period !== currentPeriod && reportingPeriods.includes(period)) {
     let requestedValue = ''
-    $('[id*="ddlRCRuns"] option, #plnMain_ddlRCRuns option').each((_i, opt) => {
+    $('[id*="ddlRCRuns"] option, #plnMain_ddlRCRuns option, [id*="ddlReportCardRuns"] option').each((_i, opt) => {
       if ($(opt).text().trim() === period) { requestedValue = $(opt).attr('value') ?? ''; return false }
     })
-    const dropdownName = $('[id*="ddlRCRuns"]').attr('name') ?? 'ctl00$plnMain$ddlRCRuns'
+    const dropdownName = $('[id*="ddlRCRuns"], [id*="ddlReportCardRuns"]').first().attr('name') ?? 'ctl00$plnMain$ddlRCRuns'
     const formData = new URLSearchParams({
       __EVENTTARGET: dropdownName,
       __EVENTARGUMENT: '',
@@ -1082,8 +1270,8 @@ export async function getReportCard(sessionToken: string, period?: string): Prom
       __VIEWSTATEGENERATOR: ($('[id="__VIEWSTATEGENERATOR"]').val() as string) ?? '',
       [dropdownName]: requestedValue,
     })
-    const postRes = await http.post(`${origin}HomeAccess/Grades/ReportCard`, formData.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${origin}HomeAccess/Grades/ReportCard` },
+    const postRes = await http.post(rcContentUrl, formData.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: rcContentUrl },
     })
     html = postRes.data as string
     $ = cheerio.load(html)
@@ -1139,11 +1327,27 @@ export async function getProgressReport(sessionToken: string, date?: string): Pr
   const origin = stored.baseUrl
 
   await sleep(800 + Math.random() * 400)
-  const initialRes = await http.get(`${origin}HomeAccess/Grades/IPR`, {
+  const iprUrl = `${origin}HomeAccess/Grades/IPR`
+  const initialRes = await http.get(iprUrl, {
     headers: { Referer: `${origin}HomeAccess/Home.aspx` },
   })
 
-  let html = initialRes.data as string
+  const outerIPRHtml = initialRes.data as string
+  const $outerIPR = cheerio.load(outerIPRHtml)
+  let html = outerIPRHtml
+  let iprContentUrl = iprUrl
+
+  const ipriframeSrc = $outerIPR('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="IPR"], iframe[src*="Progress"]').attr('src')
+  if (ipriframeSrc && $outerIPR('table').length === 0) {
+    iprContentUrl = ipriframeSrc.startsWith('http') ? ipriframeSrc : new URL(ipriframeSrc, iprUrl).toString()
+    console.log('[IPR] Shell page — fetching iframe:', iprContentUrl)
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(iprContentUrl, { headers: { Referer: iprUrl } })
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 500) html = iframeRes.data
+    } catch (e) { console.warn('[IPR] iframe fetch failed:', e instanceof Error ? e.message : String(e)) }
+  }
+
   let $ = cheerio.load(html)
 
   // Extract IPR date dropdown options (#plnMain_ddlIPRDates)
@@ -1172,8 +1376,8 @@ export async function getProgressReport(sessionToken: string, date?: string): Pr
       __VIEWSTATEGENERATOR: ($('[id="__VIEWSTATEGENERATOR"]').val() as string) ?? '',
       [dropdownName]: requestedValue,
     })
-    const postRes = await http.post(`${origin}HomeAccess/Grades/IPR`, formData.toString(), {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: `${origin}HomeAccess/Grades/IPR` },
+    const postRes = await http.post(iprContentUrl, formData.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', Referer: iprContentUrl },
     })
     html = postRes.data as string
     $ = cheerio.load(html)
@@ -1235,7 +1439,7 @@ export async function getProgressReport(sessionToken: string, date?: string): Pr
 export async function getContactTeachers(sessionToken: string): Promise<{
   teachers: Array<{ name: string; courseName: string; period: string; email: null; emailNote: string; emailHint: string }>
 }> {
-  const classes = await getGrades(sessionToken)
+  const { classes } = await getGrades(sessionToken)
 
   const teachers = classes
     .filter(c => c.teacher && c.teacher.trim() !== '')

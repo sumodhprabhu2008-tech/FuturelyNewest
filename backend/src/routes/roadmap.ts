@@ -22,7 +22,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response): Promise<vo
     return
   }
   try {
-    const profile = await prisma.studentProfile.findUnique({ where: { userId: req.userId } })
+    const profile = await prisma.profile.findUnique({ where: { userId: req.userId } })
     const courses = await prisma.course.findMany({
       where: { userId: req.userId },
       include: { grades: { where: { gradingPeriod: 'CURRENT' }, take: 1 } },

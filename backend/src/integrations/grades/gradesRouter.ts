@@ -24,6 +24,21 @@ import { normalizeHacGrades, normalizePsGrades } from './normalizeGrades'
 
 const router = Router()
 
+// ── URL normalizer (mirrors extractOrigin in hacClient) ───────────────────────
+// Ensures the baseUrl stored in the session always ends with a trailing slash
+// so that all scraping functions can safely do `${origin}HomeAccess/...`.
+// Without this, a stored URL like "https://homeaccess.katyisd.org" (no slash)
+// produces "https://homeaccess.katyisd.orghomeaccess/..." → ENOTFOUND.
+function toOrigin(url: string): string {
+  try {
+    const u = new URL(url.trim())
+    return `${u.protocol}//${u.host}/`
+  } catch {
+    const m = url.trim().match(/^(https?:\/\/[^/?#]+)/)
+    return m ? `${m[1]}/` : url
+  }
+}
+
 // ── Input schemas ──────────────────────────────────────────────────────────────
 
 const hacLoginSchema = z.object({
@@ -188,7 +203,7 @@ async function resolveSession(userId: number, res: Response): Promise<ReturnType
       const restoredToken = restoreSessionFromCache(
         userId,
         connection.systemType as SchoolSystemType,
-        connection.districtUrl,
+        toOrigin(connection.districtUrl),
         connection.cachedSession,
       )
       if (restoredToken) entry = getSessionByUserId(userId)
@@ -320,25 +335,33 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Best-effort: fetch real student name from HAC and update User record
+    // Best-effort: fetch real student info from HAC and sync to User + Profile
     try {
       console.log('[GRADES ROUTER] Fetching student info from HAC...')
       const studentInfo = await getStudentInfo(sessionToken)
 
-      if (studentInfo.name && studentInfo.name.trim().length > 0) {
-        await prisma.user.update({
-          where: { id: userId },
-          data: {
-            name: studentInfo.name.trim(),
-          },
-        })
+      if (studentInfo.name?.trim()) {
+        await prisma.user.update({ where: { id: userId }, data: { name: studentInfo.name.trim() } })
         console.log('[GRADES ROUTER] Updated user name from HAC:', studentInfo.name.trim())
       }
+
+      // Save counselor and graduation year into Profile
+      const profileUpdate: Record<string, unknown> = {}
+      if (studentInfo.counselor?.trim()) profileUpdate.counselorName = studentInfo.counselor.trim()
+      const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
+      if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) profileUpdate.graduationYear = cohortNum
+
+      if (Object.keys(profileUpdate).length > 0) {
+        await prisma.profile.upsert({
+          where: { userId },
+          create: { userId, ...profileUpdate },
+          update: profileUpdate,
+        })
+        console.log('[GRADES ROUTER] Synced profile from HAC:', profileUpdate)
+      }
     } catch (infoErr: unknown) {
-      // Non-fatal: log and continue. Login still succeeds.
       console.warn('[GRADES ROUTER] Could not fetch student info (non-fatal):',
-        infoErr instanceof Error ? infoErr.message : String(infoErr)
-      )
+        infoErr instanceof Error ? infoErr.message : String(infoErr))
     }
 
     // Persist the session cookie to DB so it can survive backend restarts
@@ -453,7 +476,7 @@ router.get('/current', async (req: AuthRequest, res: Response): Promise<void> =>
     touchSession(userId)
 
     if (entry.session.systemType === 'HAC') {
-      const rawHacGrades = await hacGrades(entry.token)
+      const { classes: rawHacGrades } = await hacGrades(entry.token)
       const normalizedGrades = normalizeHacGrades(rawHacGrades)
 
       // Sync upcoming assignments from HAC into the planner.
@@ -470,7 +493,6 @@ router.get('/current', async (req: AuthRequest, res: Response): Promise<void> =>
               })()
             : new Date(Date.now() + 7 * 86400000), // default 1 week out if no date
           estimatedMinutes: 30,
-          source: 'HAC',
         }))
       )
 
@@ -487,7 +509,6 @@ router.get('/current', async (req: AuthRequest, res: Response): Promise<void> =>
             },
             update: {
               dueDate: assignment.dueDate,
-              source: 'HAC',
             },
             create: {
               ...assignment,
@@ -590,7 +611,8 @@ router.get('/gpa', async (req: AuthRequest, res: Response): Promise<void> => {
     let rawGrades: Array<{ average: string | null; grade?: string | null }>
 
     if (entry.session.systemType === 'HAC') {
-      rawGrades = await hacGrades(entry.token)
+      const { classes } = await hacGrades(entry.token)
+      rawGrades = classes
     } else {
       const ps = await psGrades(entry.token)
       rawGrades = ps.map(c => ({ average: c.grade }))
@@ -673,7 +695,7 @@ router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => 
       const restoredToken = restoreSessionFromCache(
         userId,
         cachedConnection.systemType as SchoolSystemType,
-        cachedConnection.districtUrl,
+        toOrigin(cachedConnection.districtUrl),
         cachedConnection.cachedSession
       )
       if (restoredToken) {
@@ -717,8 +739,9 @@ router.get('/classwork', async (req: AuthRequest, res: Response): Promise<void> 
 
   try {
     touchSession(req.userId!)
-    const classes = await hacGrades(entry.token)
-    res.json({ data: { classes } })
+    const period = req.query.period as string | undefined
+    const { classes, availablePeriods, currentPeriod } = await hacGrades(entry.token, period)
+    res.json({ data: { classes, availablePeriods, currentPeriod } })
   } catch (err: unknown) {
     sendError(res, 'FETCH_CLASSWORK', err, 'FETCH_ERROR')
   }

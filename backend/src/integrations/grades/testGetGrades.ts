@@ -36,22 +36,23 @@ async function main() {
 
   console.log('\n📥 Fetching grades...')
   try {
-    const grades = await getGrades(token)
+    const { classes: grades, availablePeriods, currentPeriod } = await getGrades(token)
     console.log('\n✅ Grades fetched successfully!')
+    console.log(`📅 Periods available: ${availablePeriods.join(', ') || 'none'} (current: ${currentPeriod})`)
     console.log(`📚 Found ${grades.length} classes:\n`)
 
     if (grades.length === 0) {
       console.log('(No classes parsed - the HTML selectors may not match)')
       console.log('Check hac_classwork_debug.html for the raw HTML')
     } else {
-      grades.forEach((cls, i) => {
+      grades.forEach((cls, i: number) => {
         console.log(`  ${i + 1}. ${cls.name}`)
         console.log(`     Teacher: ${cls.teacher}`)
         console.log(`     Period: ${cls.period}`)
         console.log(`     Average: ${cls.average ?? 'N/A'}`)
         console.log(`     Assignments: ${cls.scores.length}`)
         if (cls.scores.length > 0) {
-          cls.scores.slice(0, 3).forEach(s => {
+          cls.scores.slice(0, 3).forEach((s: { name: string; score: number | null; totalPoints: number | null; percentage: string }) => {
             console.log(`       - ${s.name}: ${s.score ?? '?'}/${s.totalPoints ?? '?'} (${s.percentage})`)
           })
           if (cls.scores.length > 3) console.log(`       ... and ${cls.scores.length - 3} more`)
@@ -59,8 +60,7 @@ async function main() {
         console.log()
       })
 
-      // Print summary for easy debugging
-      const totalScores = grades.reduce((sum, c) => sum + c.scores.length, 0)
+      const totalScores = grades.reduce((sum: number, c: { scores: unknown[] }) => sum + c.scores.length, 0)
       console.log(`📊 Summary: ${grades.length} classes, ${totalScores} total assignments`)
     }
   } catch (err) {

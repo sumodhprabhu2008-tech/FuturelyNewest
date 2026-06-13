@@ -14,7 +14,7 @@ interface PortalStatus { connected: boolean; systemType: string | null; district
 
 export default function SettingsPage() {
   const router = useRouter()
-  const [data, setData]           = useState<StudentData | null>(null)
+  const [data, setData]                     = useState<StudentData | null>(null)
   const [portalStatus, setPortalStatus]     = useState<PortalStatus | null>(null)
   const [portalLoading, setPortalLoading]   = useState(true)
   const [portalSystem, setPortalSystem]     = useState<SystemType>('HAC')
@@ -24,8 +24,21 @@ export default function SettingsPage() {
   const [portalConnecting, setPortalConnecting] = useState(false)
   const [portalError, setPortalError]       = useState<string | null>(null)
 
+  // Editable academic fields
+  const [satScore, setSatScore]         = useState('')
+  const [actScore, setActScore]         = useState('')
+  const [futurePlan, setFuturePlan]     = useState('')
+  const [saving, setSaving]             = useState(false)
+  const [saveMsg, setSaveMsg]           = useState<string | null>(null)
+  const [dirty, setDirty]               = useState(false)
+
   useEffect(() => {
-    api.me().then(setData).catch(() => null)
+    api.me().then(d => {
+      setData(d)
+      setSatScore(d.profile?.satScore?.toString() ?? '')
+      setActScore(d.profile?.actScore?.toString() ?? '')
+      setFuturePlan(d.profile?.futureDecision ?? '')
+    }).catch(() => null)
     api.portalStatus().then(status => {
       setPortalStatus(status)
       if (!status.connected) {
@@ -49,8 +62,9 @@ export default function SettingsPage() {
       if (portalSystem === 'HAC') await api.portalLoginHAC(portalUrl, portalUsername, portalPassword)
       else await api.portalLoginPS(portalUrl, portalUsername, portalPassword)
       setPortalPassword(''); setPortalUsername('')
-      const status = await api.portalStatus()
+      const [status, fresh] = await Promise.all([api.portalStatus(), api.me()])
       setPortalStatus(status)
+      setData(fresh)
     } catch (err) {
       setPortalError(err instanceof Error ? err.message : 'Connection failed')
     } finally { setPortalConnecting(false) }
@@ -63,6 +77,25 @@ export default function SettingsPage() {
       setPortalStatus({ connected: false, systemType: null, districtUrl: null, sessionExpiresIn: 0, lastSynced: null })
     } catch { /* ignore */ }
     finally { setPortalConnecting(false) }
+  }
+
+  async function handleSaveScores() {
+    setSaving(true); setSaveMsg(null)
+    const sat = satScore.trim() ? parseInt(satScore.trim(), 10) : null
+    const act = actScore.trim() ? parseInt(actScore.trim(), 10) : null
+    try {
+      await api.updateProfile({
+        satScore: sat,
+        actScore: act,
+        futureDecision: futurePlan.trim() || null,
+      })
+      setSaveMsg('Saved!')
+      setDirty(false)
+      const fresh = await api.me()
+      setData(fresh)
+    } catch {
+      setSaveMsg('Failed to save')
+    } finally { setSaving(false); setTimeout(() => setSaveMsg(null), 3000) }
   }
 
   const profile = data?.profile ?? null
@@ -85,16 +118,80 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Academic info */}
+          {/* Academic Info — editable */}
           <div className="ns-card" style={S.card}>
             <p style={S.cardLabel}>Academic Info</p>
-            {[
-              ['SAT Score',       profile?.satScore?.toString() ?? 'Not set'],
-              ['ACT Score',       profile?.actScore?.toString() ?? 'Not set'],
-              ['Future Plan',     profile?.futureDecision ?? 'Not set'],
-              ['Counselor',       profile?.counselorName ?? 'Unassigned'],
-              ['Graduation Year', profile?.graduationYear?.toString() ?? '—'],
-            ].map(([l, v]) => <InfoRow key={l} label={l!} value={v!} />)}
+
+            {/* SAT Score */}
+            <div style={S.fieldRow}>
+              <label style={S.fieldRowLabel}>SAT Score</label>
+              <input
+                className="ns-input"
+                type="number"
+                min={400} max={1600}
+                placeholder="400–1600"
+                value={satScore}
+                onChange={e => { setSatScore(e.target.value); setDirty(true) }}
+                style={S.inlineInput}
+              />
+            </div>
+
+            {/* ACT Score */}
+            <div style={S.fieldRow}>
+              <label style={S.fieldRowLabel}>ACT Score</label>
+              <input
+                className="ns-input"
+                type="number"
+                min={1} max={36}
+                placeholder="1–36"
+                value={actScore}
+                onChange={e => { setActScore(e.target.value); setDirty(true) }}
+                style={S.inlineInput}
+              />
+            </div>
+
+            {/* Future Plan */}
+            <div style={S.fieldRow}>
+              <label style={S.fieldRowLabel}>Future Plan</label>
+              <input
+                className="ns-input"
+                type="text"
+                placeholder="e.g. Computer Science at UT"
+                value={futurePlan}
+                onChange={e => { setFuturePlan(e.target.value); setDirty(true) }}
+                style={S.inlineInput}
+              />
+            </div>
+
+            {/* Counselor — read only, from HAC */}
+            <InfoRow
+              label="Counselor"
+              value={profile?.counselorName ?? 'Unassigned'}
+              sub={profile?.counselorName ? 'From school portal' : undefined}
+            />
+
+            {/* Graduation Year — read only, from HAC */}
+            <InfoRow
+              label="Graduation Year"
+              value={profile?.graduationYear?.toString() ?? '—'}
+              sub={profile?.graduationYear ? 'From school portal' : undefined}
+            />
+
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <button
+                className="ns-btn-primary"
+                style={{ height: 38, padding: '0 20px', fontSize: 13, opacity: dirty ? 1 : 0.5 }}
+                onClick={handleSaveScores}
+                disabled={saving || !dirty}
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              {saveMsg && (
+                <span style={{ fontSize: 13, color: saveMsg === 'Saved!' ? '#22C55E' : 'var(--error)' }}>
+                  {saveMsg}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* School Portal */}
@@ -126,7 +223,7 @@ export default function SettingsPage() {
                   ))}
                 </div>
                 {[
-                  { label: 'Portal URL', value: portalUrl, onChange: setPortalUrl, type: 'url', placeholder: 'https://' },
+                  { label: 'Portal URL', value: portalUrl, onChange: setPortalUrl, type: 'url', placeholder: 'https://', ac: '' },
                   { label: 'Username',   value: portalUsername, onChange: setPortalUsername, type: 'text', placeholder: 'Your school username', ac: 'username' },
                   { label: 'Password',   value: portalPassword, onChange: setPortalPassword, type: 'password', placeholder: 'Your school password', ac: 'current-password' },
                 ].map(f => (
@@ -173,11 +270,14 @@ export default function SettingsPage() {
   )
 }
 
-function InfoRow({ label, value }: { label: string; value: string }) {
+function InfoRow({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
       <span style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>{label}</span>
-      <span style={{ fontSize: 13.5, color: 'var(--text)', fontWeight: 500 }}>{value}</span>
+      <div style={{ textAlign: 'right' as const }}>
+        <span style={{ fontSize: 13.5, color: 'var(--text)', fontWeight: 500 }}>{value}</span>
+        {sub && <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>{sub}</div>}
+      </div>
     </div>
   )
 }
@@ -191,6 +291,9 @@ const S: Record<string, React.CSSProperties> = {
   profileSub:   { fontSize: 13, color: 'var(--text-secondary)', marginTop: 3 },
   card:         { padding: 20, marginBottom: 16 },
   cardLabel:    { fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 14 },
+  fieldRow:     { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)', gap: 12 },
+  fieldRowLabel:{ fontSize: 13.5, color: 'var(--text-secondary)', flexShrink: 0, margin: 0 },
+  inlineInput:  { width: 160, textAlign: 'right' as const, padding: '5px 10px', fontSize: 13.5, height: 34 },
   connectedRow: { display: 'flex', alignItems: 'center', gap: 8 },
   connectedDot: { width: 7, height: 7, borderRadius: '50%', background: '#22C55E', flexShrink: 0 },
   connectedText:{ color: '#22C55E', fontWeight: 600, fontSize: 14 },

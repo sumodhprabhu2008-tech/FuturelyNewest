@@ -1,7 +1,6 @@
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -9,173 +8,147 @@ generator client {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String
-  name         String?
-  tag          String   @default("Student")
-  tagColor     String?  @default("grey")
-  role         String   @default("STUDENT")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  profile           StudentProfile?
-  schoolConnection  SchoolConnection?
-  courses     Course[]
-  grades      Grade[]
-  assignments Assignment[]
-  posts           Post[]
-  comments        Comment[]
-  likes           Like[]
-  following       Follow[] @relation("follower")
-  followers       Follow[] @relation("following")
-  parentLinks     ParentStudentLink[] @relation("ParentLinks")
-  studentLinks    ParentStudentLink[] @relation("StudentLinks")
+  id                Int                  @id @default(autoincrement())
+  email             String               @unique
+  passwordHash      String
+  name              String?
+  role              String               @default("STUDENT")
+  tag               String?
+  tagColor          String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  courses           Course[]
+  assignments       Assignment[]
+  profile           Profile?
+  posts             Post[]
+  likes             Like[]
+  comments          Comment[]
+  followers         Follow[]             @relation("Following")
+  following         Follow[]             @relation("Follower")
+  schoolConnection          SchoolConnection?
+  parentLinks               ParentStudentLink[]  @relation("ParentLinks")
+  studentLinks              ParentStudentLink[]  @relation("StudentLinks")
+  notificationsReceived     Notification[]       @relation("NotifRecipient")
+  notificationsSent         Notification[]       @relation("NotifSender")
 }
 
-model StudentProfile {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @unique
-  studentId      String   @unique
-  gradeLevel     Int
-  graduationYear Int
-  futureDecision String?
-  satScore       Int?
-  actScore       Float?
-  counselorName  String?
-  weightedGpa    Float    @default(0.0)
-  unweightedGpa  Float    @default(0.0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Profile {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id])
+  gradeLevel      Int      @default(9)
+  graduationYear  Int?
+  weightedGpa     Float    @default(0)
+  unweightedGpa   Float    @default(0)
+  futureDecision  String?
+  satScore        Int?
+  actScore        Int?
+  counselorName   String?
 }
 
 model Course {
   id          Int      @id @default(autoincrement())
-  userId      Int
   name        String
   teacher     String
   period      Int
+  courseType  String
+  creditHours Int
   semester    String
-  courseType  String   @default("STANDARD")
-  creditHours Float    @default(1.0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  grades Grade[]
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  grades      Grade[]
 }
 
 model Grade {
   id            Int      @id @default(autoincrement())
-  courseId      Int
-  userId        Int
   letterGrade   String
   percentage    Float
-  gradingPeriod String   @default("CURRENT")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  course Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gradingPeriod String
+  courseId      Int
+  course        Course   @relation(fields: [courseId], references: [id])
 }
 
 model Assignment {
   id               Int       @id @default(autoincrement())
-  userId           Int
   title            String
-  subject          String
+  description      String?
+  subject          String?
+  estimatedMinutes Int?
+  priority         String?
   dueDate          DateTime
-  estimatedMinutes Int
   completed        Boolean   @default(false)
   completedAt      DateTime?
-  source           String    @default("SEED")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  userId           Int
+  user             User      @relation(fields: [userId], references: [id])
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, title, subject])
-  @@index([userId, dueDate])
+  @@unique([userId, title, subject], name: "userId_title_subject")
   @@index([userId, completed])
+  @@index([userId, dueDate])
 }
-
-model SchoolConnection {
-  id             Int       @id @default(autoincrement())
-  userId         Int       @unique
-  systemType     String    // 'HAC' | 'PowerSchool'
-  districtUrl    String
-  hacUsername    String?   // HAC login username — unique to prevent duplicate registrations
-  lastSynced     DateTime?
-  // TODO: encrypt in production
-  cachedSession  String?   // Serialized cookie jar JSON
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([systemType, districtUrl, hacUsername])
-}
-
-model ComplianceAuditLog {
-  id           Int      @id @default(autoincrement())
-  userId       Int
-  resourceType String
-  resourceId   String?
-  action       String
-  ipAddress    String
-  timestamp    DateTime @default(now())
-
-  @@index([userId, timestamp])
-}
-
-// ── Study Feed ──────────────────────────────────────────────────────────────
 
 model Post {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        Int       @id @default(autoincrement())
   body      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  comments Comment[]
-  likes    Like[]
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  likes     Like[]
+  comments  Comment[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
 model Comment {
   id        Int      @id @default(autoincrement())
-  postId    Int
-  userId    Int
   body      String
+  postId    Int
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Like {
-  id     Int @id @default(autoincrement())
-  postId Int
+  id     Int  @id @default(autoincrement())
   userId Int
-
-  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId Int
+  user   User @relation(fields: [userId], references: [id])
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, userId])
 }
 
 model Follow {
-  id          Int      @id @default(autoincrement())
-  followerId  Int      // the user who follows
-  followingId Int      // the user being followed
-  createdAt   DateTime @default(now())
-
-  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
-  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  id          Int  @id @default(autoincrement())
+  followerId  Int
+  followingId Int
+  follower    User @relation("Follower", fields: [followerId], references: [id])
+  following   User @relation("Following", fields: [followingId], references: [id])
 
   @@unique([followerId, followingId])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  fromUserId  Int
+  type        String   // FOLLOW | LIKE | COMMENT
+  postId      Int?
+  preview     String?
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  recipient   User     @relation("NotifRecipient", fields: [userId], references: [id])
+  sender      User     @relation("NotifSender", fields: [fromUserId], references: [id])
+}
+
+model SchoolConnection {
+  id            Int       @id @default(autoincrement())
+  userId        Int       @unique
+  user          User      @relation(fields: [userId], references: [id])
+  systemType    String
+  districtUrl   String
+  hacUsername   String?
+  cachedSession String?
+  lastSynced    DateTime?
 }
 
 model ParentStudentLink {
@@ -183,9 +156,8 @@ model ParentStudentLink {
   parentId  Int
   studentId Int
   createdAt DateTime @default(now())
-
-  parent  User @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Cascade)
-  student User @relation("StudentLinks", fields: [studentId], references: [id], onDelete: Cascade)
+  parent    User     @relation("ParentLinks", fields: [parentId], references: [id])
+  student   User     @relation("StudentLinks", fields: [studentId], references: [id])
 
   @@unique([parentId, studentId])
 }

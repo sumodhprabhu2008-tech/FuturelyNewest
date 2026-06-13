@@ -79,4 +79,32 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response): Promise<
   }
 })
 
+router.patch('/me/profile', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ data: null, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }); return }
+  const { satScore, actScore, futureDecision } = req.body as {
+    satScore?: number | null
+    actScore?: number | null
+    futureDecision?: string | null
+  }
+  try {
+    const profile = await prisma.profile.upsert({
+      where: { userId: req.userId },
+      create: {
+        userId: req.userId,
+        ...(satScore !== undefined && { satScore: satScore ?? null }),
+        ...(actScore !== undefined && { actScore: actScore ?? null }),
+        ...(futureDecision !== undefined && { futureDecision: futureDecision ?? null }),
+      },
+      update: {
+        ...(satScore !== undefined && { satScore: satScore ?? null }),
+        ...(actScore !== undefined && { actScore: actScore ?? null }),
+        ...(futureDecision !== undefined && { futureDecision: futureDecision ?? null }),
+      },
+    })
+    res.json({ data: profile })
+  } catch {
+    res.status(500).json({ data: null, error: { code: 'INTERNAL_ERROR', message: 'Failed to update profile' } })
+  }
+})
+
 export default router

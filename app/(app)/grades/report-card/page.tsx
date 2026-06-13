@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+import { api } from '../../../../lib/api'
 
 interface ReportCardCourse {
   name: string
@@ -26,13 +25,6 @@ const letterColor = (l: string) => {
   return GRADE_COLOR[l.toUpperCase().charAt(0)] ?? 'var(--text-muted)'
 }
 
-function apiFetch<T>(path: string): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('ns_token') : null
-  return fetch(`${BASE}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  }).then(r => r.json())
-}
-
 export default function ReportCardPage() {
   const router = useRouter()
   const [data, setData] = useState<ReportCardData | null>(null)
@@ -42,14 +34,10 @@ export default function ReportCardPage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    apiFetch<{ data?: ReportCardData; error?: { message?: string } | string }>('/api/integrations/grades/report-card')
+    api.portalReportCard()
       .then(json => {
-        if (json.error) {
-          const msg = typeof json.error === 'string' ? json.error : (json.error?.message ?? 'Failed to load')
-          setError(msg); return
-        }
-        setData(json.data ?? null)
-        setSelectedPeriod(json.data?.currentPeriod ?? json.data?.reportingPeriods?.[0] ?? '')
+        setData(json)
+        setSelectedPeriod(json.currentPeriod ?? json.reportingPeriods?.[0] ?? '')
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load report card'))
       .finally(() => setLoading(false))
@@ -58,17 +46,11 @@ export default function ReportCardPage() {
   function handlePeriodChange(period: string) {
     setSelectedPeriod(period)
     setPeriodLoading(true)
-    apiFetch<{ data?: ReportCardData; error?: { message?: string } | string }>(
-      `/api/integrations/grades/report-card?period=${encodeURIComponent(period)}`
-    )
+    api.portalReportCard(period)
       .then(json => {
-        if (json.error) {
-          const msg = typeof json.error === 'string' ? json.error : (json.error?.message ?? 'Failed to load')
-          setError(msg); return
-        }
         setData(prev => prev
-          ? { ...prev, courses: json.data?.courses ?? [], currentPeriod: period }
-          : json.data ?? null)
+          ? { ...prev, courses: json.courses ?? [], currentPeriod: period }
+          : json)
       })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load'))
       .finally(() => setPeriodLoading(false))
@@ -95,15 +77,23 @@ export default function ReportCardPage() {
           {data.reportingPeriods && data.reportingPeriods.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Reporting Period</div>
-              <select
-                value={selectedPeriod}
-                onChange={e => handlePeriodChange(e.target.value)}
-                style={S.select}
-              >
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
                 {data.reportingPeriods.map(p => (
-                  <option key={p} value={p}>{p}</option>
+                  <button
+                    key={p}
+                    onClick={() => handlePeriodChange(p)}
+                    style={{
+                      padding: '7px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: 500, cursor: 'pointer',
+                      border: selectedPeriod === p ? 'none' : '1px solid var(--border)',
+                      background: selectedPeriod === p ? 'var(--primary)' : 'var(--surface)',
+                      color: selectedPeriod === p ? '#000' : 'var(--text-secondary)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {p}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 
@@ -157,7 +147,6 @@ const S: Record<string, React.CSSProperties> = {
   back:        { background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: 13, cursor: 'pointer', padding: 0, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 4 },
   title:       { fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 20 },
   errorBanner: { background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '10px 14px', color: 'var(--error)', fontSize: 13, marginBottom: 16 },
-  select:      { background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', fontSize: 13, outline: 'none', minWidth: 240, cursor: 'pointer' },
   th:          { textAlign: 'left' as const, padding: '14px', fontSize: 11, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: 'var(--text-muted)' },
   td:          { padding: '12px 14px', fontSize: 13.5 },
 }

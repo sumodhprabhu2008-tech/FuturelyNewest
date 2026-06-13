@@ -17,7 +17,7 @@ router.post('/chat', requireAuth, async (req: AuthRequest, res: Response): Promi
   try {
     const { message: userMessage } = req.body as { message: string }
 
-    const profile = await prisma.studentProfile.findUnique({ where: { userId: req.userId } })
+    const profile = await prisma.profile.findUnique({ where: { userId: req.userId } })
     const user = await prisma.user.findUnique({ where: { id: req.userId } })
     const courses = await prisma.course.findMany({
       where: { userId: req.userId },

@@ -36,8 +36,8 @@ const SIDEBAR_EXPANDED = 220
 const SIDEBAR_COLLAPSED = 64
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const router    = useRouter()
-  const pathname  = usePathname()
+  const router   = useRouter()
+  const pathname = usePathname()
   const [checked, setChecked]     = useState(false)
   const [userName, setUserName]   = useState<string>('Student')
   const [collapsed, setCollapsed] = useState(true)
@@ -65,26 +65,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <aside style={{ ...S.sidebar, width: sideW }}>
-        {/* Toggle button */}
         <button
           onClick={() => setCollapsed(c => !c)}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={S.toggleBtn}
         >
           {collapsed ? (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           ) : (
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           )}
         </button>
 
-        {/* Logo */}
         <div style={{ ...S.logoRow, justifyContent: collapsed ? 'center' : 'flex-start' }}>
           <a href="/dashboard" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: collapsed ? 0 : 10 }}>
             <Image src="/logo.svg" alt="NextStep" width={28} height={28} style={{ flexShrink: 0 }} />
@@ -92,7 +85,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </a>
         </div>
 
-        {/* Nav */}
         <nav style={S.nav}>
           {NAV.map(link => {
             const active = pathname === link.href || pathname.startsWith(link.href + '/')
@@ -117,7 +109,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* Bottom user section */}
         <div style={S.bottom}>
           {!collapsed && (
             <div style={S.userRow}>
@@ -127,7 +118,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
           <button
             className="ns-btn-ghost"
-            style={{ ...S.logoutBtn, justifyContent: collapsed ? 'center' : 'center' }}
+            style={{ ...S.logoutBtn, justifyContent: 'center' }}
             onClick={handleLogout}
             title={collapsed ? 'Log out' : undefined}
           >
@@ -141,7 +132,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
       <main style={{ ...S.main, marginLeft: sideW }}>{children}</main>
     </div>
   )
@@ -158,6 +148,6 @@ const S: Record<string, React.CSSProperties> = {
   userRow:    { display: 'flex', alignItems: 'center', gap: 9, paddingLeft: 4, overflow: 'hidden' },
   userAvatar: { width: 26, height: 26, borderRadius: '50%', background: 'var(--primary-dim)', border: '1px solid var(--primary)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 },
   userName:   { fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  logoutBtn:  { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', fontSize: 13, padding: '8px 12px' },
+  logoutBtn:  { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, padding: '8px 12px' },
   main:       { flex: 1, padding: 'var(--page-px)', minHeight: '100vh', transition: 'margin-left 0.2s ease' },
 }

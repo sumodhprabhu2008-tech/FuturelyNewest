@@ -20,10 +20,10 @@ export default function LandingPage() {
       {/* Nav */}
       <nav style={styles.nav}>
         <div style={styles.navInner}>
-          <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
             <Image src="/logo.svg" alt="NextStep" width={32} height={32} />
             <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.3px' }}>NextStep</span>
-          </a>
+          </Link>
           <Link href="/login" style={styles.navBtn}>Log In →</Link>
         </div>
       </nav>
