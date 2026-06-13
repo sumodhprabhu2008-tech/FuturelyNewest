@@ -607,9 +607,15 @@ router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => 
     where: { userId },
   })
 
+  // Consider the portal "connected" if a SchoolConnection record exists
+  // (user has linked their portal at least once), even if the in-memory
+  // session expired. This prevents the UI from asking the user to
+  // reconnect every time the backend restarts.
+  const isConnected = Boolean(entry) || Boolean(connection)
+
   res.json({
     data: {
-      connected: Boolean(entry),
+      connected: isConnected,
       systemType: entry?.session.systemType ?? connection?.systemType ?? null,
       districtUrl: entry?.session.baseUrl ?? connection?.districtUrl ?? null,
       lastSynced: connection?.lastSynced ?? null,

@@ -36,6 +36,8 @@ export default function GradesPage() {
   const [sortDir, setSortDir]         = useState<SortDir>('asc')
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
   const [expandedTab, setExpandedTab] = useState<Record<string, 'graded' | 'upcoming'>>({})
+  const [portalConnected, setPortalConnected] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   useEffect(() => {
     // Always load seeded data first as fallback
@@ -47,6 +49,7 @@ export default function GradesPage() {
     const liveLoad = api.portalStatus()
       .then(status => {
         if (!status.connected) return
+        setPortalConnected(true)
         setDistrictUrl(status.districtUrl)
         return api.portalGrades()
           .then(result => {
@@ -57,6 +60,7 @@ export default function GradesPage() {
           .catch(e => {
             // Non-fatal: log but fall back to seeded data
             console.warn('[GRADES] Live grade fetch failed:', e)
+            setSessionExpired(true)
           })
       })
       .catch(() => null) // Portal status check failed — not connected, use seeded
@@ -165,6 +169,13 @@ export default function GradesPage() {
       {usingLive ? (
         <div style={styles.liveBanner}>
           ✓ Showing live grades from {districtUrl ?? 'your school portal'}
+        </div>
+      ) : portalConnected && sessionExpired ? (
+        <div style={styles.demoBanner}>
+          ⚠ Session expired —{' '}
+          <a href="/settings" style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+            reconnect your school portal in Settings
+          </a>
         </div>
       ) : (
         <div style={styles.demoBanner}>
