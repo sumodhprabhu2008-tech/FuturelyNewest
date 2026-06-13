@@ -197,8 +197,26 @@ export const api = {
     request<FeedUserProfile>(`/api/feed/users/${targetUserId}/profile`),
 
   feedSearchUsers: (q: string) =>
-    request<Array<{ id: number; name: string | null; email: string }>>(
+    request<Array<{ id: number; name: string | null; email: string; tag: string | null }>>(
       `/api/feed/users/search?q=${encodeURIComponent(q)}`,
+    ),
+
+  feedUserPosts: (targetUserId: number, page = 1, limit = 20) =>
+    request<{
+      posts: FeedPost[]
+      total: number
+      page: number
+      pageSize: number
+      hasMore: boolean
+    }>(`/api/feed/users/${targetUserId}/posts?page=${page}&limit=${limit}`),
+
+  feedUpdateTag: (tag: string) =>
+    request<{ id: number; name: string | null; email: string; tag: string | null }>(
+      '/api/feed/users/me/tag',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ tag }),
+      },
     ),
 }
 
@@ -208,6 +226,7 @@ export interface FeedUser {
   id: number
   name: string | null
   email: string
+  tag: string | null
 }
 
 export interface FeedPost {
@@ -234,7 +253,9 @@ export interface FeedUserProfile {
   id: number
   name: string | null
   email: string
+  tag: string | null
   isFollowing: boolean
+  totalLikes: number
   _count: { followers: number; following: number; posts: number }
 }
 
