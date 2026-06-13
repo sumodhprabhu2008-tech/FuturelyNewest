@@ -151,6 +151,91 @@ export const api = {
     request<{ systemType: string; transcript: unknown }>(
       '/api/integrations/grades/transcript',
     ),
+
+  // ── Study Feed ──────────────────────────────────────────────────────────────
+
+  feedPosts: (page = 1, limit = 20) =>
+    request<{
+      posts: FeedPost[]
+      total: number
+      page: number
+      pageSize: number
+      hasMore: boolean
+    }>(`/api/feed/posts?page=${page}&limit=${limit}`),
+
+  feedCreatePost: (body: string) =>
+    request<FeedPost>('/api/feed/posts', {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+
+  feedDeletePost: (postId: number) =>
+    request<{ deleted: boolean }>(`/api/feed/posts/${postId}`, {
+      method: 'DELETE',
+    }),
+
+  feedToggleLike: (postId: number) =>
+    request<{ liked: boolean }>(`/api/feed/posts/${postId}/like`, {
+      method: 'POST',
+    }),
+
+  feedAddComment: (postId: number, body: string) =>
+    request<FeedComment>(`/api/feed/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+
+  feedPostDetail: (postId: number) =>
+    request<FeedPost & { comments: FeedComment[] }>(`/api/feed/posts/${postId}`),
+
+  feedToggleFollow: (targetUserId: number) =>
+    request<{ following: boolean }>(`/api/feed/users/${targetUserId}/follow`, {
+      method: 'POST',
+    }),
+
+  feedUserProfile: (targetUserId: number) =>
+    request<FeedUserProfile>(`/api/feed/users/${targetUserId}/profile`),
+
+  feedSearchUsers: (q: string) =>
+    request<Array<{ id: number; name: string | null; email: string }>>(
+      `/api/feed/users/search?q=${encodeURIComponent(q)}`,
+    ),
+}
+
+// ── Study Feed types ───────────────────────────────────────────────────────
+
+export interface FeedUser {
+  id: number
+  name: string | null
+  email: string
+}
+
+export interface FeedPost {
+  id: number
+  userId: number
+  body: string
+  createdAt: string
+  updatedAt: string
+  user: FeedUser
+  likedByMe: boolean
+  _count: { likes: number; comments: number }
+}
+
+export interface FeedComment {
+  id: number
+  postId: number
+  userId: number
+  body: string
+  createdAt: string
+  user: FeedUser
+}
+
+export interface FeedUserProfile {
+  id: number
+  name: string | null
+  email: string
+  isFollowing: boolean
+  _count: { followers: number; following: number; posts: number }
 }
 
 export type { StudentData }

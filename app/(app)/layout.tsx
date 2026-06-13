@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: '/dashboard', label: 'Dashboard', icon: '🏠' },
   { href: '/grades', label: 'Grades', icon: '📊' },
   { href: '/planner', label: 'Planner', icon: '📅' },
+  { href: '/feed', label: 'Study Feed', icon: '💬' },
   { href: '/ai', label: 'AI Chat', icon: '🤖' },
   { href: '/settings', label: 'Settings', icon: '⚙️' },
 ]

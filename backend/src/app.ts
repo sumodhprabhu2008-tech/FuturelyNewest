@@ -9,6 +9,7 @@ import assignmentsRouter from './routes/assignments'
 import studentsRouter from './routes/students'
 import roadmapRouter from './routes/roadmap'
 import aiRouter from './routes/ai'
+import feedRouter from './routes/feed'
 import { requireAuth } from './middleware/auth'
 import gradesIntegrationRouter from './integrations/grades/gradesRouter'
 
@@ -121,12 +122,14 @@ if (ENABLE_DEV_INTEGRATION_AUTH_BYPASS) {
   app.use('/api/students', devBypass, studentsRouter)
   app.use('/api/roadmap', devBypass, roadmapRouter)
   app.use('/api/ai', devBypass, aiRouter)
+  app.use('/api/feed', devBypass, feedRouter)
   app.use('/api/integrations/grades', devBypass, gradesIntegrationRouter)
 } else {
   app.use('/api/assignments', assignmentsRouter)
   app.use('/api/students', studentsRouter)
   app.use('/api/roadmap', roadmapRouter)
   app.use('/api/ai', aiRouter)
+  app.use('/api/feed', requireAuth, feedRouter)
   app.use('/api/integrations/grades', requireAuth, gradesIntegrationRouter)
 }
 
