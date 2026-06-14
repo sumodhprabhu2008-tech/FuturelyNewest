@@ -204,7 +204,7 @@ async function autoRelogin(userId: number): Promise<{ token: string; session: Re
   // Determine which credentials to use
   const isHAC = connection.systemType === 'HAC'
   const username = connection.hacUsername
-  const encryptedPassword = isHAC ? connection.hacPasswordEncrypted : connection.psPasswordEncrypted
+  const encryptedPassword = connection.encryptedPassword
 
   if (!username || !encryptedPassword) {
     console.log('[GRADES ROUTER] No stored credentials for auto-relogin, userId:', userId)
@@ -293,6 +293,115 @@ async function resolveSession(userId: number, res: Response): Promise<ReturnType
   }
 
   return entry
+}
+
+// ── Staleness threshold ────────────────────────────────────────────────────────
+const SYNC_STALE_MS = 15 * 60 * 1000 // 15 minutes
+
+function isCacheStale(lastSynced: Date | null): boolean {
+  if (!lastSynced) return true
+  return Date.now() - lastSynced.getTime() > SYNC_STALE_MS
+}
+
+// ── Background grade sync ──────────────────────────────────────────────────────
+// Fired without await after /hac/login responds. Updates syncStatus on
+// SchoolConnection so the client can poll GET /sync-status.
+async function runBackgroundSync(userId: number, sessionToken: string): Promise<void> {
+  console.log('[GRADES ROUTER] Background sync starting for userId:', userId)
+
+  // Persist session cookie immediately so restart-recovery works even if sync fails
+  try {
+    const stored = getSessionByToken(sessionToken)
+    if (stored) {
+      await prisma.schoolConnection.update({
+        where: { userId },
+        data: { cachedSession: stored.sessionData },
+      })
+    }
+  } catch (e) {
+    console.warn('[GRADES ROUTER] Background sync: could not persist session:', e instanceof Error ? e.message : String(e))
+  }
+
+  // Staleness check — skip re-scrape if data is fresh
+  const connection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
+  if (connection && !isCacheStale(connection.lastSynced)) {
+    console.log('[GRADES ROUTER] Background sync skipped — data fresh, last synced:', connection.lastSynced)
+    await prisma.schoolConnection.update({ where: { userId }, data: { syncStatus: 'complete' } }).catch(() => {})
+    return
+  }
+
+  // Mark sync in progress
+  await prisma.schoolConnection.update({
+    where: { userId },
+    data: { syncStatus: 'syncing', syncError: null },
+  }).catch(() => {})
+
+  try {
+    const entry = getSessionByUserId(userId)
+    if (!entry) throw new Error('Session expired before sync could run')
+
+    if (entry.session.systemType === 'HAC') {
+      // Sync student info into User + Profile
+      try {
+        const studentInfo = await getStudentInfo(sessionToken)
+        if (studentInfo.name?.trim()) {
+          await prisma.user.update({ where: { id: userId }, data: { name: studentInfo.name.trim() } })
+          console.log('[GRADES ROUTER] Background sync: updated user name:', studentInfo.name.trim())
+        }
+        const profileUpdate: Record<string, unknown> = {}
+        if (studentInfo.counselor?.trim()) profileUpdate.counselorName = studentInfo.counselor.trim()
+        const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
+        if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) profileUpdate.graduationYear = cohortNum
+        if (Object.keys(profileUpdate).length > 0) {
+          await prisma.profile.upsert({ where: { userId }, create: { userId, ...profileUpdate }, update: profileUpdate })
+        }
+      } catch (infoErr) {
+        console.warn('[GRADES ROUTER] Background sync: student info fetch failed (non-fatal):',
+          infoErr instanceof Error ? infoErr.message : String(infoErr))
+      }
+
+      // Sync upcoming assignments from HAC grades
+      const { classes: rawHacGrades } = await hacGrades(entry.token)
+      const normalizedGrades = normalizeHacGrades(rawHacGrades)
+      const upcomingToSync = normalizedGrades.flatMap(course =>
+        (course.upcomingAssignments ?? []).map(a => ({
+          userId,
+          title: a.name,
+          subject: course.name,
+          dueDate: a.dateDue
+            ? (() => { const p = new Date(a.dateDue); return isNaN(p.getTime()) ? new Date(Date.now() + 7 * 86400000) : p })()
+            : new Date(Date.now() + 7 * 86400000),
+          estimatedMinutes: 30,
+        }))
+      )
+      for (const assignment of upcomingToSync) {
+        await prisma.assignment.upsert({
+          where: { userId_title_subject: { userId: assignment.userId, title: assignment.title, subject: assignment.subject } },
+          update: { dueDate: assignment.dueDate },
+          create: { ...assignment, completed: false },
+        }).catch(async () => {
+          const existing = await prisma.assignment.findFirst({
+            where: { userId: assignment.userId, title: assignment.title, subject: assignment.subject },
+          })
+          if (!existing) await prisma.assignment.create({ data: { ...assignment, completed: false } })
+        })
+      }
+      console.log(`[GRADES ROUTER] Background sync: synced ${upcomingToSync.length} assignments for userId:`, userId)
+    }
+
+    await prisma.schoolConnection.update({
+      where: { userId },
+      data: { syncStatus: 'complete', syncError: null, lastSynced: new Date() },
+    }).catch(() => {})
+    console.log('[GRADES ROUTER] Background sync complete for userId:', userId)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[GRADES ROUTER] Background sync failed for userId:', userId, ':', msg)
+    await prisma.schoolConnection.update({
+      where: { userId },
+      data: { syncStatus: 'error', syncError: msg },
+    }).catch(() => {})
+  }
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
@@ -386,7 +495,7 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
-        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
+        ...(encryptedPassword ? { encryptedPassword: encryptedPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
@@ -394,7 +503,7 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
-        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
+        ...(encryptedPassword ? { encryptedPassword: encryptedPassword } : {}),
       },
     })
 
@@ -416,50 +525,8 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Best-effort: fetch real student info from HAC and sync to User + Profile
-    try {
-      console.log('[GRADES ROUTER] Fetching student info from HAC...')
-      const studentInfo = await getStudentInfo(sessionToken)
-
-      if (studentInfo.name?.trim()) {
-        await prisma.user.update({ where: { id: userId }, data: { name: studentInfo.name.trim() } })
-        console.log('[GRADES ROUTER] Updated user name from HAC:', studentInfo.name.trim())
-      }
-
-      // Save counselor and graduation year into Profile
-      const profileUpdate: Record<string, unknown> = {}
-      if (studentInfo.counselor?.trim()) profileUpdate.counselorName = studentInfo.counselor.trim()
-      const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
-      if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) profileUpdate.graduationYear = cohortNum
-
-      if (Object.keys(profileUpdate).length > 0) {
-        await prisma.profile.upsert({
-          where: { userId },
-          create: { userId, ...profileUpdate },
-          update: profileUpdate,
-        })
-        console.log('[GRADES ROUTER] Synced profile from HAC:', profileUpdate)
-      }
-    } catch (infoErr: unknown) {
-      console.warn('[GRADES ROUTER] Could not fetch student info (non-fatal):',
-        infoErr instanceof Error ? infoErr.message : String(infoErr))
-    }
-
-    // Persist the session cookie to DB so it can survive backend restarts
-    try {
-      const stored = getSessionByToken(sessionToken)
-      if (stored) {
-        await prisma.schoolConnection.update({
-          where: { userId },
-          data: { cachedSession: stored.sessionData },
-        })
-        console.log('[GRADES ROUTER] Session cached to DB for userId:', userId)
-      }
-    } catch (cacheErr) {
-      console.warn('[GRADES ROUTER] Non-fatal: could not cache session:',
-        cacheErr instanceof Error ? cacheErr.message : String(cacheErr))
-    }
-
+    // Respond immediately — all remaining work (session cache, student info, grade sync)
+    // runs in the background so the client is not blocked by HAC scraping.
     res.json({
       data: {
         sessionToken,
@@ -468,6 +535,11 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         expiresIn: 1800,
       },
     })
+
+    // Fire-and-forget: persist session + sync grades in background
+    runBackgroundSync(userId, sessionToken).catch(e =>
+      console.error('[GRADES ROUTER] Unhandled background sync error:', e instanceof Error ? e.message : String(e))
+    )
   } catch (err: unknown) {
     sendError(res, 'HAC_LOGIN', err, 'LOGIN_FAILED')
   }
@@ -518,14 +590,14 @@ router.post('/powerschool/login', async (req: AuthRequest, res: Response): Promi
       update: {
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
-        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
+        ...(encryptedPsPassword ? { encryptedPassword: encryptedPsPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
         userId,
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
-        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
+        ...(encryptedPsPassword ? { encryptedPassword: encryptedPsPassword } : {}),
       },
     })
 
@@ -829,6 +901,27 @@ router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => 
       sessionExpiresIn: entry
         ? Math.max(0, Math.floor((entry.session.expiresAt - Date.now()) / 1000))
         : 0,
+    },
+  })
+})
+
+router.get('/sync-status', async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.userId!
+  const connection = await prisma.schoolConnection.findUnique({
+    where: { userId },
+    select: { syncStatus: true, syncError: true, lastSynced: true },
+  }).catch(() => null)
+
+  if (!connection) {
+    res.json({ data: { status: 'idle', lastSyncedAt: null, errorMessage: null } })
+    return
+  }
+
+  res.json({
+    data: {
+      status: connection.syncStatus ?? 'idle',
+      lastSyncedAt: connection.lastSynced ?? null,
+      errorMessage: connection.syncError ?? null,
     },
   })
 })

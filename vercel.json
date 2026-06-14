@@ -1,12 +1,10 @@
 {
-<<<<<<< HEAD
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "outputDirectory": ".next",
-  "installCommand": "npm install"
-=======
   "version": 2,
   "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    },
     {
       "src": "backend/api/index.ts",
       "use": "@vercel/node"
@@ -15,12 +13,12 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/api/index.ts"
+      "dest": "/backend/api/index.ts"
     },
     {
       "src": "/ws/(.*)",
-      "dest": "backend/api/index.ts"
-    }
+      "dest": "/backend/api/index.ts"
+    },
+    { "handle": "filesystem" }
   ]
->>>>>>> de61643a6d905500d33ca77b0bad39f344502214
 }
