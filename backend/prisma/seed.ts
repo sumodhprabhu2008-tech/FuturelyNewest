@@ -38,7 +38,8 @@ async function main(): Promise<void> {
   })
 
   await prisma.assignment.deleteMany({ where: { userId: user.id } })
-  await prisma.grade.deleteMany({ where: { userId: user.id } })
+  const userCourses = await prisma.course.findMany({ where: { userId: user.id }, select: { id: true } })
+  await prisma.grade.deleteMany({ where: { courseId: { in: userCourses.map(c => c.id) } } })
   await prisma.course.deleteMany({ where: { userId: user.id } })
 
   for (const def of COURSES) {
@@ -57,7 +58,6 @@ async function main(): Promise<void> {
     await prisma.grade.create({
       data: {
         courseId: course.id,
-        userId: user.id,
         letterGrade: def.letterGrade,
         percentage: def.percentage,
         gradingPeriod: 'CURRENT',

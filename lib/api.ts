@@ -147,6 +147,34 @@ export const api = {
       { method: 'DELETE' },
     ),
 
+  portalSyncProfile: () =>
+    request<{
+      synced: boolean
+      name: string | null
+      profile: {
+        id: number
+        userId: number
+        gradeLevel: number
+        graduationYear: number | null
+        weightedGpa: number
+        unweightedGpa: number
+        futureDecision: string | null
+        satScore: number | null
+        actScore: number | null
+        counselorName: string | null
+      } | null
+      studentInfo: {
+        name: string
+        grade: string
+        school: string
+        district: string
+        counselor: string
+        cohortYear: string
+      }
+    }>('/api/integrations/grades/sync-profile', {
+      method: 'POST',
+    }),
+
   portalGrades: () =>
     request<{
       systemType: string
@@ -163,7 +191,10 @@ export const api = {
           courses: Array<{ name: string; grade: string; credits: string }>
         }>
         cumulativeGPA: string | null
+        weightedGPA: string | null
+        unweightedGPA: string | null
         classRank: string | null
+        quartile: string | null
       }
     }>('/api/integrations/grades/transcript'),
 
@@ -181,12 +212,17 @@ export const api = {
     request<{
       reportingPeriods: string[]
       currentPeriod: string
-      courses: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+      semesters: {
+        sem1: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+        sem2: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+      }
     }>(`/api/integrations/grades/report-card${period ? `?period=${encodeURIComponent(period)}` : ''}`),
 
   portalGpa: () =>
     request<{
       gpa: number | null
+      unweightedGpa: number | null
+      weightedGpa: number | null
       courseCount: number
       systemType: string
     }>('/api/integrations/grades/gpa'),

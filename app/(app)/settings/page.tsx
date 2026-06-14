@@ -23,6 +23,8 @@ export default function SettingsPage() {
   const [portalPassword, setPortalPassword] = useState('')
   const [portalConnecting, setPortalConnecting] = useState(false)
   const [portalError, setPortalError]       = useState<string | null>(null)
+  const [syncing, setSyncing]             = useState(false)
+  const [syncMsg, setSyncMsg]             = useState<string | null>(null)
 
   // Editable academic fields
   const [satScore, setSatScore]         = useState('')
@@ -77,6 +79,25 @@ export default function SettingsPage() {
       setPortalStatus({ connected: false, systemType: null, districtUrl: null, sessionExpiresIn: 0, lastSynced: null })
     } catch { /* ignore */ }
     finally { setPortalConnecting(false) }
+  }
+
+  async function handleSyncProfile() {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const result = await api.portalSyncProfile()
+      setSyncMsg('Profile synced from HAC!')
+      // Refresh the user data to reflect the updated profile
+      const fresh = await api.me()
+      setData(fresh)
+      setSatScore(fresh.profile?.satScore?.toString() ?? '')
+      setActScore(fresh.profile?.actScore?.toString() ?? '')
+      setFuturePlan(fresh.profile?.futureDecision ?? '')
+    } catch (err) {
+      setSyncMsg(err instanceof Error ? err.message : 'Sync failed')
+    } finally {
+      setSyncing(false)
+      setTimeout(() => setSyncMsg(null), 4000)
+    }
   }
 
   async function handleSaveScores() {
@@ -207,6 +228,60 @@ export default function SettingsPage() {
                   <span style={S.sysBadge}>{portalStatus.systemType}</span>
                 </div>
                 <p style={S.distUrl}>{portalStatus.districtUrl}</p>
+
+                {/* Re-sync profile from HAC — refreshes counselor, graduation year, name */}
+                {portalStatus.systemType === 'HAC' && (
+                  <div style={{ marginTop: 12 }}>
+                    <button
+                      className="ns-btn-ghost"
+                      style={{
+                        height: 36,
+                        padding: '0 16px',
+                        fontSize: 13,
+                        color: 'var(--primary)',
+                        borderColor: 'rgba(75,110,255,0.3)',
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onClick={handleSyncProfile}
+                      disabled={syncing}
+                    >
+                      {syncing ? (
+                        <>
+                          <span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span>
+                          Syncing…
+                        </>
+                      ) : (
+                        <>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 2v6h-6"/>
+                            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+                            <path d="M3 22v-6h6"/>
+                            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+                          </svg>
+                          Re-sync from HAC
+                        </>
+                      )}
+                    </button>
+                    {syncMsg && (
+                      <p style={{
+                        fontSize: 12,
+                        color: syncMsg.includes('fail') || syncMsg.includes('Error') ? 'var(--error)' : '#22C55E',
+                        marginTop: 6,
+                        textAlign: 'center',
+                      }}>
+                        {syncMsg}
+                      </p>
+                    )}
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textAlign: 'center' }}>
+                      Fetches counselor & graduation year from your school portal
+                    </p>
+                  </div>
+                )}
+
                 <button className="ns-btn-ghost" style={{ ...S.disconnectBtn, marginTop: 14 }}
                   onClick={handleDisconnect} disabled={portalConnecting}>
                   {portalConnecting ? 'Disconnecting…' : 'Disconnect'}

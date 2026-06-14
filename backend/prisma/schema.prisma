@@ -142,14 +142,16 @@ model Notification {
 }
 
 model SchoolConnection {
-  id            Int       @id @default(autoincrement())
-  userId        Int       @unique
-  user          User      @relation(fields: [userId], references: [id])
-  systemType    String
-  districtUrl   String
-  hacUsername   String?
-  cachedSession String?
-  lastSynced    DateTime?
+  id                    Int       @id @default(autoincrement())
+  userId                Int       @unique
+  user                  User      @relation(fields: [userId], references: [id])
+  systemType            String
+  districtUrl           String
+  hacUsername           String?
+  hacPasswordEncrypted  String?
+  psPasswordEncrypted   String?
+  cachedSession         String?
+  lastSynced            DateTime?
 }
 
 model ParentStudentLink {

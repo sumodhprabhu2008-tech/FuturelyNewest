@@ -16,7 +16,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 function dumpDebugHtml(filename: string, html: string): void {
   try {
-    const debugPath = path.resolve('C:/Users/srika/Futurely-main/backend', `debug_${filename}.html`)
+    const debugPath = path.resolve(__dirname, '..', '..', `debug_${filename}.html`)
     fs.writeFileSync(debugPath, html, 'utf8')
     console.log(`[DEBUG] Wrote ${debugPath}`)
   } catch { /* ignore */ }
@@ -58,7 +58,10 @@ export interface HACTranscriptEntry {
 export interface HACTranscript {
   semesters: HACTranscriptEntry[]
   cumulativeGPA: string | null
+  weightedGPA: string | null
+  unweightedGPA: string | null
   classRank: string | null
+  quartile: string | null
 }
 
 // ── Error helper ──────────────────────────────────────────────────────────────
@@ -965,12 +968,13 @@ export async function getTranscript(sessionToken: string): Promise<HACTranscript
     $group.find('table:nth-child(2) > tbody > tr.sg-asp-table-data-row, tr.sg-asp-table-data-row').each((_j, row) => {
       const cells = $(row).find('td')
       if (cells.length < 2) return
-      const courseName = cells.eq(0).text().trim()
-      if (!courseName || /^(course|class|subject)/i.test(courseName)) return
+      const courseCode = cells.eq(0).text().trim()
+      const courseDesc = cells.eq(1).text().trim()
+      if (!courseCode || !courseDesc || /^(course|class|subject)/i.test(courseCode)) return
       courses.push({
-        name: courseName,
-        grade: cells.eq(1).text().trim(),
-        credits: cells.eq(2).text().trim(),
+        name: `${courseCode} — ${courseDesc}`,
+        grade: cells.eq(2).text().trim(),
+        credits: cells.eq(3).text().trim(),
       })
     })
 
@@ -1096,10 +1100,159 @@ export async function getTranscript(sessionToken: string): Promise<HACTranscript
     })
   }
 
+  // ── Extract weighted GPA, unweighted GPA, class rank, and quartile ──────
+  // These are in the tblCumGPAInfo table at the bottom of the transcript page.
+  // Structure: rows labeled "Weighted GPA*" and "Unweighted GPA*" with columns: GPA Type, GPA, Rank, Quartile
+
+  let weightedGPA: string | null = null
+  let unweightedGPA: string | null = null
+  let classRank: string | null = null
+  let quartile: string | null = null
+
+  // Strategy 1: specific ID selectors from the GPA summary table
+  const weightedSelectors = [
+    '[id*="lblGPACum3"]',
+    '[id*="lblGPACum"][id*="3"]',
+  ]
+  const unweightedSelectors = [
+    '[id*="lblGPACum4"]',
+    '[id*="lblGPACum"][id*="4"]',
+  ]
+  const rankSelectors = [
+    '[id*="lblGPARank3"]',
+    '[id*="lblGPARank"]:not(:empty)',
+  ]
+  const quartileSelectors = [
+    '[id*="Quartile3"]',
+    '[id*="Quartile"]:not(:empty)',
+  ]
+
+  for (const sel of weightedSelectors) {
+    const text = $(sel).text().trim()
+    if (text && text.match(/^\d/)) {
+      weightedGPA = text
+      console.log(`[TRANSCRIPT] Weighted GPA found via "${sel}": ${weightedGPA}`)
+      break
+    }
+  }
+
+  for (const sel of unweightedSelectors) {
+    const text = $(sel).text().trim()
+    if (text && text.match(/^\d/)) {
+      unweightedGPA = text
+      console.log(`[TRANSCRIPT] Unweighted GPA found via "${sel}": ${unweightedGPA}`)
+      break
+    }
+  }
+
+  for (const sel of rankSelectors) {
+    const text = $(sel).text().trim()
+    if (text && text.match(/\d/)) {
+      classRank = text
+      console.log(`[TRANSCRIPT] Class rank found via "${sel}": ${classRank}`)
+      break
+    }
+  }
+
+  for (const sel of quartileSelectors) {
+    const text = $(sel).text().trim()
+    if (text && text.match(/\d/)) {
+      quartile = text
+      console.log(`[TRANSCRIPT] Quartile found via "${sel}": ${quartile}`)
+      break
+    }
+  }
+
+  // Strategy 2: scan the GPA summary table rows for Weighted/Unweighted labels
+  if (!weightedGPA || !unweightedGPA || !classRank || !quartile) {
+    const gpaTable = $('[id*="tblCumGPAInfo"], [id*="CumGPAInfo"]').first()
+    if (gpaTable.length > 0) {
+      console.log('[TRANSCRIPT] Found GPA summary table — scanning rows')
+      gpaTable.find('tr').each((_i, row) => {
+        const cells = $(row).find('td')
+        if (cells.length < 2) return
+        const label = cells.eq(0).text().trim().toLowerCase()
+        if (label.includes('weighted') && !label.includes('unweight')) {
+          if (!weightedGPA) weightedGPA = cells.eq(1).text().trim() || null
+          if (!classRank) classRank = cells.eq(2).text().trim() || null
+          if (!quartile) quartile = cells.eq(3).text().trim() || null
+          console.log(`[TRANSCRIPT] Weighted row: GPA=${weightedGPA}, Rank=${classRank}, Quartile=${quartile}`)
+        } else if (label.includes('unweighted')) {
+          if (!unweightedGPA) unweightedGPA = cells.eq(1).text().trim() || null
+          // Unweighted row may also have rank/quartile if weighted is empty
+          if (!classRank && cells.eq(2).text().trim()) classRank = cells.eq(2).text().trim() || null
+          if (!quartile && cells.eq(3).text().trim()) quartile = cells.eq(3).text().trim() || null
+          console.log(`[TRANSCRIPT] Unweighted row: GPA=${unweightedGPA}`)
+        }
+      })
+    }
+  }
+
+  // Strategy 3: ensure quartile is just a bare number 1-4
+  if (quartile) {
+    const cleanQ = quartile.replace(/[^\d]/g, '').trim()
+    const qNum = parseInt(cleanQ, 10)
+    if (qNum >= 1 && qNum <= 4) {
+      quartile = String(qNum)
+    } else {
+      console.warn(`[TRANSCRIPT] Discarded invalid quartile value: "${quartile}" — will calculate from rank`)
+      quartile = null
+    }
+  }
+
+  // Strategy 4: if quartile is missing but classRank is available (e.g. "445 / 996"),
+  // calculate quartile from rank position.
+  if (!quartile && classRank) {
+    const rankMatch = classRank.match(/(\d+)\s*\/\s*(\d+)/)
+    if (rankMatch) {
+      const position = parseInt(rankMatch[1], 10)
+      const total = parseInt(rankMatch[2], 10)
+      if (!isNaN(position) && !isNaN(total) && total > 0) {
+        const ratio = position / total
+        // Quartile 1 = top 25% (0–0.25), Q2 = 0.25–0.5, Q3 = 0.5–0.75, Q4 = 0.75–1.0
+        if (ratio <= 0.25) quartile = '1'
+        else if (ratio <= 0.5) quartile = '2'
+        else if (ratio <= 0.75) quartile = '3'
+        else quartile = '4'
+        console.log(`[TRANSCRIPT] Quartile calculated from rank "${classRank}": Q${quartile} (ratio=${ratio.toFixed(3)})`)
+      }
+    }
+  }
+
+  // Strategy 3 (renamed): text pattern scan for weighted/unweighted GPA
+  if (!weightedGPA || !unweightedGPA) {
+    const bodyText = $('body').text()
+    if (!weightedGPA) {
+      const wMatch = bodyText.match(/Weighted\s+GPA\*?\s*[:\s]*([\d]+\.[\d]+)/i)
+      if (wMatch) {
+        weightedGPA = wMatch[1]
+        console.log(`[TRANSCRIPT] Weighted GPA found via text scan: ${weightedGPA}`)
+      }
+    }
+    if (!unweightedGPA) {
+      const uMatch = bodyText.match(/Unweighted\s+GPA\*?\s*[:\s]*([\d]+\.[\d]+)/i)
+      if (uMatch) {
+        unweightedGPA = uMatch[1]
+        console.log(`[TRANSCRIPT] Unweighted GPA found via text scan: ${unweightedGPA}`)
+      }
+    }
+  }
+
+  console.log('[TRANSCRIPT] Final GPA summary:', {
+    cumulativeGPA,
+    weightedGPA,
+    unweightedGPA,
+    classRank,
+    quartile,
+  })
+
   return {
     semesters,
     cumulativeGPA,
-    classRank: null,
+    weightedGPA,
+    unweightedGPA,
+    classRank,
+    quartile,
   }
 }
 
@@ -1209,10 +1362,23 @@ export async function getSchedule(sessionToken: string): Promise<object[]> {
   return schedule
 }
 
+function numericToLetter(grade: string): string {
+  const n = parseInt(grade)
+  if (isNaN(n)) return ''
+  if (n >= 90) return 'A'
+  if (n >= 80) return 'B'
+  if (n >= 70) return 'C'
+  if (n >= 60) return 'D'
+  return 'F'
+}
+
 export async function getReportCard(sessionToken: string, period?: string): Promise<{
   reportingPeriods: string[]
   currentPeriod: string
-  courses: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+  semesters: {
+    sem1: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+    sem2: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }>
+  }
 }> {
   const stored = getSessionByToken(sessionToken)
   if (!stored) throw new Error('School session expired — please log in again')
@@ -1280,7 +1446,9 @@ export async function getReportCard(sessionToken: string, period?: string): Prom
 
   dumpDebugHtml('reportcard', html)
 
-  const courses: Array<{ name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }> = []
+  type RCCourse = { name: string; period: string; numericGrade: string; letterGrade: string; credits: string; teacher: string }
+  const sem1: RCCourse[] = []
+  const sem2: RCCourse[] = []
 
   const rowSelectors = [
     '.sg-asp-table-data-row',
@@ -1290,29 +1458,44 @@ export async function getReportCard(sessionToken: string, period?: string): Prom
     'table tr',
   ]
 
+  // HAC dgReportCard columns:
+  // 0: Course  1: Description  2: Period  3: Teacher  4: Room
+  // 5: Att.Credit  6: Ern.Credit
+  // 7: 1ST  8: 2ND  9: 3RD  10: EXM1  11: SEM1
+  // 12: 4TH  13: 5TH  14: 6TH  15: EXM2  16: SEM2
   for (const sel of rowSelectors) {
     const rows = $(sel)
     if (rows.length < 2) continue
     rows.each((_i, row) => {
       const cells = $(row).find('td')
-      if (cells.length < 3) return
-      const name = cells.eq(0).text().trim()
-      if (!name || /^(course|class|subject|period|name)/i.test(name)) return
-      courses.push({
-        name,
-        period: cells.eq(1).text().trim(),
-        numericGrade: cells.eq(2).text().trim(),
-        letterGrade: cells.eq(3).text().trim(),
-        credits: cells.eq(4).text().trim() || '',
-        teacher: cells.eq(5).text().trim() || '',
-      })
+      if (cells.length < 4) return
+      const courseCode = cells.eq(0).text().trim()
+      const description = cells.eq(1).text().trim().replace(/\s+/g, ' ')
+      if (!courseCode || /^(course|class|subject|period|name)/i.test(courseCode)) return
+      const name    = `${courseCode} — ${description}`
+      const prd     = cells.eq(2).text().trim()
+      const teacher = cells.eq(3).text().trim()
+
+      const sem1Grade = cells.length > 11 ? cells.eq(11).text().trim() : ''
+      const sem2Grade = cells.length > 16 ? cells.eq(16).text().trim() : ''
+
+      if (sem1Grade) {
+        sem1.push({ name, period: prd, numericGrade: sem1Grade, letterGrade: numericToLetter(sem1Grade), credits: '', teacher })
+      }
+      if (sem2Grade) {
+        sem2.push({ name, period: prd, numericGrade: sem2Grade, letterGrade: numericToLetter(sem2Grade), credits: '', teacher })
+      }
+      // If neither grade is populated yet (mid-year), still include the row in sem1 as a placeholder
+      if (!sem1Grade && !sem2Grade) {
+        sem1.push({ name, period: prd, numericGrade: '', letterGrade: '', credits: '', teacher })
+      }
     })
-    if (courses.length > 0) break
+    if (sem1.length > 0 || sem2.length > 0) break
   }
 
-  console.log(`[REPORT CARD] Parsed ${courses.length} courses, ${reportingPeriods.length} periods`)
-  if (courses.length === 0) console.warn('[REPORT CARD] No courses found — check debug_reportcard.html')
-  return { reportingPeriods, currentPeriod, courses }
+  console.log(`[REPORT CARD] Parsed sem1=${sem1.length} sem2=${sem2.length} courses, ${reportingPeriods.length} periods`)
+  if (sem1.length === 0) console.warn('[REPORT CARD] No courses found — check debug_reportcard.html')
+  return { reportingPeriods, currentPeriod, semesters: { sem1, sem2 } }
 }
 
 export async function getProgressReport(sessionToken: string, date?: string): Promise<{
@@ -1469,24 +1652,150 @@ export async function getStudentInfo(sessionToken: string): Promise<HACStudentIn
   const { http } = restoreSession(stored)
   const origin = stored.baseUrl
 
-  // The Demographic page IS the registration page on new HAC
-  const res = await http.get(`${origin}HomeAccess/Registration/Demographic`, {
+  // The Demographic page is a shell that loads content inside an iframe
+  const demoUrl = `${origin}HomeAccess/Registration/Demographic`
+  console.log('[HAC CLIENT] Fetching student info from:', demoUrl)
+
+  const res = await http.get(demoUrl, {
     headers: { Referer: `${origin}HomeAccess/Home.aspx` },
   })
-  const $ = cheerio.load(res.data as string)
+
+  const outerHtml = res.data as string
+  const finalUrl = (res.request as { res?: { responseUrl?: string } })?.res?.responseUrl ?? demoUrl
+
+  console.log('[HAC CLIENT] Demographic page response', {
+    status: res.status,
+    finalUrl,
+    htmlLength: outerHtml.length,
+  })
+
+  // Check if redirected to login (session expired)
+  if (finalUrl.includes('Account/LogOn') || finalUrl.includes('Account/Login')) {
+    throw new Error('School session expired — please log in again')
+  }
+
+  // The actual student data is inside an iframe — resolve and fetch it
+  let html = outerHtml
+  const $outer = cheerio.load(outerHtml)
+  const iframeSrc = $outer('iframe.sg-legacy-iframe, iframe[id*="legacy"], iframe[src*="Registration"], iframe[src*="Student"]').attr('src')
+  if (iframeSrc) {
+    const iframeUrl = iframeSrc.startsWith('http') ? iframeSrc : new URL(iframeSrc, demoUrl).toString()
+    console.log('[HAC CLIENT] Demographic page has iframe — fetching:', iframeUrl)
+    try {
+      await sleep(400 + Math.random() * 300)
+      const iframeRes = await http.get(iframeUrl, { headers: { Referer: demoUrl } })
+      if (typeof iframeRes.data === 'string' && iframeRes.data.length > 200) {
+        html = iframeRes.data
+        console.log('[HAC CLIENT] Iframe content fetched:', { htmlLength: html.length })
+      }
+    } catch (e) {
+      console.warn('[HAC CLIENT] Failed to fetch demographic iframe:', e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  dumpDebugHtml('demographic', html)
+
+  const $ = cheerio.load(html)
 
   // Helper: try multiple selectors, return first non-empty result
   function trySelectors(selectors: string[]): string {
     for (const sel of selectors) {
       const text = $(sel).text().trim()
-      if (text) return text
+      if (text) {
+        console.log(`[HAC CLIENT] Student info found via selector "${sel}": "${text.slice(0, 100)}"`)
+        return text
+      }
     }
     return ''
   }
 
+  // Helper: try label-value pair patterns (common in HAC demographic pages)
+  // Looks for patterns like "Counselor: <span>John Smith</span>" or label + sibling
+  function tryLabelValuePatterns(labelText: string, valueSelectors: string[]): string {
+    // First try direct selectors
+    const direct = trySelectors(valueSelectors)
+    if (direct) return direct
+
+    // Then try finding by label text and extracting adjacent value
+    const bodyText = $('body').text()
+    const patterns = [
+      new RegExp(`${labelText}\\s*[:\\-]\\s*([^\\n,]+)`, 'i'),
+      new RegExp(`${labelText}\\s+([A-Z][a-z]+ [A-Z][a-z]+)`, 'i'),
+    ]
+    for (const pattern of patterns) {
+      const match = bodyText.match(pattern)
+      if (match?.[1]) {
+        const value = match[1].trim()
+        console.log(`[HAC CLIENT] Student info found via text pattern for "${labelText}": "${value}"`)
+        return value
+      }
+    }
+
+    return ''
+  }
+
+  // Try to find label-value pairs in table rows (common HAC layout)
+  // E.g., <tr><td>Counselor</td><td><span>...</span></td></tr>
+  function tryTableRowPattern(labelKeywords: string[]): string {
+    let result = ''
+    $('tr, .row, div').each((_i, row) => {
+      if (result) return false
+      const rowText = $(row).text().toLowerCase()
+      if (labelKeywords.some(kw => rowText.includes(kw.toLowerCase()))) {
+        // Look for a span or td that contains the value
+        const spans = $(row).find('span, td:last-child')
+        spans.each((_j, span) => {
+          if (result) return false
+          const text = $(span).text().trim()
+          // Skip if this is just the label itself
+          if (text && !labelKeywords.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) {
+            result = text
+          }
+        })
+      }
+    })
+    return result
+  }
+
+  // Log all spans with IDs for debugging
+  console.log('[HAC CLIENT] All spans with IDs on demographic page:')
+  $('span[id]').each((_i, el) => {
+    const id = $(el).attr('id') ?? ''
+    const text = $(el).text().trim()
+    if (text) console.log(`  #${id} = "${text.slice(0, 80)}"`)
+  })
+
+  // Log all labels/divs for debugging
+  console.log('[HAC CLIENT] All labels and key divs:')
+  $('label, dt, .label, th').each((_i, el) => {
+    const text = $(el).text().trim()
+    if (text && text.length < 50) console.log(`  label: "${text}"`)
+  })
+
+  const counselor = tryLabelValuePatterns('counselor', [
+    '#plnMain_lblCounselor',
+    '[id*="Counselor"]',
+    '[id*="counselor"]',
+  ]) || tryTableRowPattern(['counselor'])
+
+  const cohortYear = tryLabelValuePatterns('cohort', [
+    '#plnMain_lblCohortYear',
+    '[id*="CohortYear"]',
+    '[id*="Cohort"]',
+    '[id*="cohortYear"]',
+    '[id*="GraduationYear"]',
+    '[id*="graduationYear"]',
+  ]) || tryTableRowPattern(['cohort', 'graduation year', 'grad year', 'class of'])
+
+  console.log('[HAC CLIENT] Final student info:', {
+    counselor: counselor || '(empty)',
+    cohortYear: cohortYear || '(empty)',
+  })
+
   return {
     name: trySelectors([
       '#plnMain_lblRegStudentName',
+      '#plnMain_lblStudentName',
       '.sg-banner-student-name',
       '[id*="StudentName"]',
       '[id*="lblName"]',
@@ -1508,15 +1817,8 @@ export async function getStudentInfo(sessionToken: string): Promise<HACStudentIn
       '.sg-banner-district',
       '[id*="District"]',
     ]),
-    counselor: trySelectors([
-      '#plnMain_lblCounselor',
-      '[id*="Counselor"]',
-    ]),
-    cohortYear: trySelectors([
-      '#plnMain_lblCohortYear',
-      '[id*="CohortYear"]',
-      '[id*="GraduationYear"]',
-    ]),
+    counselor,
+    cohortYear,
   }
 }
 

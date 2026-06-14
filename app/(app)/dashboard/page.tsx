@@ -27,11 +27,14 @@ export default function DashboardPage() {
   const router = useRouter()
   const [data, setData]         = useState<StudentData | null>(null)
   const [error, setError]       = useState<string | null>(null)
-  const [portalGpa, setPortalGpa] = useState<number | null>(null)
+  const [portalUGpa, setPortalUGpa] = useState<number | null>(null)
+  const [portalWGpa, setPortalWGpa] = useState<number | null>(null)
 
   useEffect(() => {
     api.me().then(setData).catch(e => setError(e instanceof Error ? e.message : 'Failed'))
-    api.portalGpa().then(d => { if (d.gpa !== null) setPortalGpa(d.gpa) }).catch(() => {})
+    api.portalGpa()
+      .then(g => { setPortalUGpa(g.unweightedGpa); setPortalWGpa(g.weightedGpa) })
+      .catch(() => { /* portal not connected or session expired — fall back to profile */ })
   }, [])
 
   if (error) return <div style={{ padding: 40, color: 'var(--error)' }}>{error}</div>
@@ -40,8 +43,8 @@ export default function DashboardPage() {
   )
 
   const firstName = data.name?.split(' ')[0] ?? 'Student'
-  const uGpa = (data.profile?.unweightedGpa ?? 0).toFixed(2)
-  const wGpa = (data.profile?.weightedGpa ?? 0).toFixed(2)
+  const uGpa = (portalUGpa ?? data.profile?.unweightedGpa ?? 0).toFixed(2)
+  const wGpa = (portalWGpa ?? data.profile?.weightedGpa ?? 0).toFixed(2)
   const today = new Date()
   const dueToday = data.assignments.filter(a => {
     if (a.completed) return false
@@ -60,36 +63,16 @@ export default function DashboardPage() {
         <span style={S.dateChip}>{formatDate()}</span>
       </div>
 
-      {/* Portal GPA card — only when portal is connected */}
-      {portalGpa !== null && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-          <div className="ns-card" style={{ padding: 18, background: 'rgba(0,200,150,0.06)', borderColor: 'rgba(0,200,150,0.25)' }}>
-            <p style={S.cardLabel}>Current GPA</p>
-            <p style={{ fontSize: 32, fontWeight: 800, color: 'var(--primary)', marginTop: 8, marginBottom: 4, lineHeight: 1 }}>
-              {portalGpa.toFixed(2)}
-            </p>
-            <button onClick={() => router.push('/grades/what-if')}
-              style={{ background: 'none', border: 'none', color: 'rgba(0,200,150,0.7)', fontSize: 12, cursor: 'pointer', padding: 0 }}>
-              Simulate changes →
-            </button>
-          </div>
-          <div className="ns-card" style={{ padding: 18, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' as const }}>
-            <p style={S.cardLabel}>What-If GPA</p>
-            <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6, marginBottom: 12 }}>
-              Simulate your GPA
-            </p>
-            <button className="ns-btn-primary" style={{ height: 34, padding: '0 16px', fontSize: 12 }}
-              onClick={() => router.push('/grades/what-if')}>
-              Open Calculator
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Top row: GPA + Due Today */}
+      {/* GPA + Due Today */}
       <div style={S.topRow}>
         <div className="ns-card" style={{ ...S.card, flex: 1 }}>
-          <p style={S.cardLabel}>Current GPA</p>
+          <p style={S.cardLabel}>
+            GPA
+            <button onClick={() => router.push('/grades/what-if')}
+              style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 11, cursor: 'pointer', padding: 0, marginLeft: 8 }}>
+              What-If →
+            </button>
+          </p>
           <div style={S.gpaRow}>
             <div style={S.gpaBlock}>
               <div style={S.gpaNum}>{uGpa}</div>

@@ -4,6 +4,40 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+function letterToPoints(letter: string): number {
+  const map: Record<string, number> = {
+    'A+': 4.0, 'A': 4.0, 'A-': 3.7,
+    'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+    'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+    'D+': 1.3, 'D': 1.0, 'D-': 0.7,
+    'F':  0.0,
+  }
+  return map[letter.trim().toUpperCase()] ?? 0.0
+}
+
+function weightedBonus(courseType: string): number {
+  const t = courseType.toUpperCase()
+  if (t.includes('AP') || t.includes('IB')) return 1.0
+  if (t.includes('HONOR') || t.includes('DUAL')) return 0.5
+  return 0.0
+}
+
+function computeGpa(courses: Array<{ courseType: string; grades: Array<{ letterGrade: string }> }>): { unweighted: number; weighted: number } {
+  const graded = courses.filter(c => c.grades.length > 0)
+  if (graded.length === 0) return { unweighted: 0, weighted: 0 }
+  let uSum = 0, wSum = 0
+  for (const c of graded) {
+    const pts = letterToPoints(c.grades[0].letterGrade)
+    uSum += pts
+    wSum += Math.min(pts + weightedBonus(c.courseType), 5.0)
+  }
+  const n = graded.length
+  return {
+    unweighted: Math.round((uSum / n) * 100) / 100,
+    weighted:   Math.round((wSum / n) * 100) / 100,
+  }
+}
+
 router.get('/me', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   if (req.userId === undefined) {
     res.status(401).json({ data: null, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } })
@@ -62,13 +96,17 @@ router.get('/me', requireAuth, async (req: AuthRequest, res: Response): Promise<
       }
     })
 
+    const { unweighted, weighted } = computeGpa(user.courses)
+
     res.json({
       data: {
         id: user.id,
         email: user.email,
         name: user.name,
         role: user.role,
-        profile: user.profile,
+        profile: user.profile
+          ? { ...user.profile, unweightedGpa: unweighted, weightedGpa: weighted }
+          : null,
         courses,
         assignments: user.assignments,
         stats,

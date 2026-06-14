@@ -21,6 +21,7 @@ import { buildSessionWithCLCookie } from './classLinkHelper'
 import { getSessionByUserId, getSessionByToken, deleteSessionByUserId, restoreSessionFromCache, touchSession, type SchoolSystemType } from './sessionStore'
 import { prisma } from '../../lib/prisma'
 import { normalizeHacGrades, normalizePsGrades } from './normalizeGrades'
+import { encryptPassword, decryptPassword } from './credentialCrypto'
 
 const router = Router()
 
@@ -191,23 +192,93 @@ function requireSession(userId: number, res: Response): ReturnType<typeof getSes
   return entry
 }
 
-// ── Session resolution with DB fallback ───────────────────────────────────────
+// ── Auto-relogin using stored credentials ─────────────────────────────────────
+// When the HAC/PS session expires (~60 min), silently re-login using the
+// encrypted credentials stored in SchoolConnection so the user never has
+// to re-enter their portal password.
+
+async function autoRelogin(userId: number): Promise<{ token: string; session: ReturnType<typeof getSessionByUserId> } | null> {
+  const connection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
+  if (!connection) return null
+
+  // Determine which credentials to use
+  const isHAC = connection.systemType === 'HAC'
+  const username = connection.hacUsername
+  const encryptedPassword = isHAC ? connection.hacPasswordEncrypted : connection.psPasswordEncrypted
+
+  if (!username || !encryptedPassword) {
+    console.log('[GRADES ROUTER] No stored credentials for auto-relogin, userId:', userId)
+    return null
+  }
+
+  let password: string
+  try {
+    password = decryptPassword(encryptedPassword)
+  } catch (e) {
+    console.warn('[GRADES ROUTER] Failed to decrypt stored password:', e instanceof Error ? e.message : String(e))
+    return null
+  }
+
+  console.log('[GRADES ROUTER] Attempting auto-relogin for userId:', userId, 'system:', connection.systemType)
+
+  try {
+    const origin = toOrigin(connection.districtUrl)
+    let sessionToken: string
+
+    if (isHAC) {
+      sessionToken = await loginHAC(origin, username, password, userId)
+    } else {
+      sessionToken = await loginPowerSchool(origin, username, password, userId)
+    }
+
+    // Persist the fresh session cookie to DB
+    const stored = getSessionByToken(sessionToken)
+    if (stored) {
+      await prisma.schoolConnection.update({
+        where: { userId },
+        data: { cachedSession: stored.sessionData, lastSynced: new Date() },
+      }).catch(e => console.warn('[GRADES ROUTER] Non-fatal: failed to persist relogin session:', e instanceof Error ? e.message : String(e)))
+    }
+
+    console.log('[GRADES ROUTER] Auto-relogin successful for userId:', userId)
+    const entry = getSessionByUserId(userId)
+    return { token: sessionToken, session: entry }
+  } catch (e) {
+    console.warn('[GRADES ROUTER] Auto-relogin failed for userId:', userId, ':', e instanceof Error ? e.message : String(e))
+    return null
+  }
+}
+
+// ── Session resolution with DB fallback + auto-relogin ───────────────────────
+// Priority: in-memory session → auto-relogin → DB cache restore → error
+// When the in-memory session is gone (backend restart or expired), we try
+// auto-relogin first because the DB-cached cookie jar is almost certainly
+// expired on HAC's side (~60 min TTL). Only if relogin fails do we fall
+// back to restoring the cached cookie as a last resort.
 
 async function resolveSession(userId: number, res: Response): Promise<ReturnType<typeof getSessionByUserId>> {
+  // 1. Fast path: in-memory session is still valid
   let entry = getSessionByUserId(userId)
+  if (entry) return entry
 
-  if (!entry) {
-    const connection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
-    if (connection?.cachedSession) {
-      console.log('[GRADES ROUTER] Restoring session from DB cache for userId:', userId)
-      const restoredToken = restoreSessionFromCache(
-        userId,
-        connection.systemType as SchoolSystemType,
-        toOrigin(connection.districtUrl),
-        connection.cachedSession,
-      )
-      if (restoredToken) entry = getSessionByUserId(userId)
-    }
+  // 2. No in-memory session → try auto-relogin with stored credentials
+  const reloginResult = await autoRelogin(userId)
+  if (reloginResult?.session) {
+    entry = reloginResult.session
+    if (entry) return entry
+  }
+
+  // 3. Auto-relogin failed → last resort: try restoring from DB-cached cookie
+  const connection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
+  if (connection?.cachedSession) {
+    console.log('[GRADES ROUTER] Last resort: restoring session from DB cache for userId:', userId)
+    const restoredToken = restoreSessionFromCache(
+      userId,
+      connection.systemType as SchoolSystemType,
+      toOrigin(connection.districtUrl),
+      connection.cachedSession,
+    )
+    if (restoredToken) entry = getSessionByUserId(userId)
   }
 
   if (!entry) {
@@ -301,12 +372,21 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
       return
     }
 
+    // Encrypt and store the HAC password for auto-relogin when sessions expire
+    let encryptedPassword: string | null = null
+    try {
+      encryptedPassword = encryptPassword(password)
+    } catch (e) {
+      console.warn('[GRADES ROUTER] Non-fatal: could not encrypt HAC password:', e instanceof Error ? e.message : String(e))
+    }
+
     await prisma.schoolConnection.upsert({
       where: { userId },
       update: {
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
+        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
@@ -314,6 +394,7 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
+        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
       },
     })
 
@@ -424,17 +505,27 @@ router.post('/powerschool/login', async (req: AuthRequest, res: Response): Promi
   try {
     const sessionToken = await loginPowerSchool(baseUrl, username, password, userId)
 
+    // Encrypt and store the PowerSchool password for auto-relogin when sessions expire
+    let encryptedPsPassword: string | null = null
+    try {
+      encryptedPsPassword = encryptPassword(password)
+    } catch (e) {
+      console.warn('[GRADES ROUTER] Non-fatal: could not encrypt PS password:', e instanceof Error ? e.message : String(e))
+    }
+
     await prisma.schoolConnection.upsert({
       where: { userId },
       update: {
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
+        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
         userId,
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
+        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
       },
     })
 
@@ -608,22 +699,36 @@ router.get('/gpa', async (req: AuthRequest, res: Response): Promise<void> => {
   if (!entry) return
 
   try {
-    let rawGrades: Array<{ average: string | null; grade?: string | null }>
+    let unweightedGpa: number | null = null
+    let weightedGpa: number | null = null
+    let courseCount = 0
 
     if (entry.session.systemType === 'HAC') {
-      const { classes } = await hacGrades(entry.token)
-      rawGrades = classes
+      // Pull the real cumulative GPAs that HAC calculates and displays on the transcript page
+      const transcript = await hacTranscript(entry.token)
+      const t = transcript as { weightedGPA?: string | null; unweightedGPA?: string | null; semesters?: Array<{ courses: unknown[] }> }
+
+      const w = parseFloat(t.weightedGPA ?? '')
+      const u = parseFloat(t.unweightedGPA ?? '')
+      if (!isNaN(w)) weightedGpa   = Math.round(w * 100) / 100
+      if (!isNaN(u)) unweightedGpa = Math.round(u * 100) / 100
+
+      courseCount = (t.semesters ?? []).reduce((acc, s) => acc + (s.courses?.length ?? 0), 0)
     } else {
       const ps = await psGrades(entry.token)
-      rawGrades = ps.map(c => ({ average: c.grade }))
+      courseCount = ps.length
+      const rawGrades = ps.map(c => ({ average: c.grade }))
+      const gpa = computeGPA(rawGrades)
+      unweightedGpa = gpa
+      weightedGpa   = gpa
     }
-
-    const gpa = computeGPA(rawGrades)
 
     res.json({
       data: {
-        gpa,
-        courseCount: rawGrades.length,
+        gpa: unweightedGpa,
+        unweightedGpa,
+        weightedGpa,
+        courseCount,
         systemType: entry.session.systemType,
       },
     })
@@ -759,8 +864,8 @@ router.get('/report-card', async (req: AuthRequest, res: Response): Promise<void
   try {
     touchSession(req.userId!)
     const period = req.query.period as string | undefined
-    const data = await getReportCard(entry.token, period)
-    res.json({ data })
+    const { reportingPeriods, currentPeriod, semesters } = await getReportCard(entry.token, period)
+    res.json({ data: { reportingPeriods, currentPeriod, semesters } })
   } catch (err: unknown) {
     sendError(res, 'FETCH_REPORT_CARD', err, 'FETCH_ERROR')
   }
@@ -819,6 +924,91 @@ router.get('/contact-teachers', async (req: AuthRequest, res: Response): Promise
     res.json({ data })
   } catch (err: unknown) {
     sendError(res, 'FETCH_CONTACT_TEACHERS', err, 'FETCH_ERROR')
+  }
+})
+
+// ── Re-sync student profile from HAC (counselor, graduation year, name) ────
+router.post('/sync-profile', async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.userId!
+  const entry = await resolveSession(userId, res)
+  if (!entry) return
+
+  if (entry.session.systemType !== 'HAC') {
+    res.status(400).json({
+      data: null,
+      error: { code: 'UNSUPPORTED', message: 'Profile sync is only available for HAC districts' },
+    })
+    return
+  }
+
+  try {
+    touchSession(userId)
+    console.log('[GRADES ROUTER] Re-syncing profile from HAC for userId:', userId)
+
+    const studentInfo = await getStudentInfo(entry.token)
+    const profileUpdate: Record<string, unknown> = {}
+    const userUpdate: Record<string, unknown> = {}
+
+    // Update name from HAC
+    if (studentInfo.name?.trim()) {
+      userUpdate.name = studentInfo.name.trim()
+    }
+
+    // Update counselor from HAC
+    if (studentInfo.counselor?.trim()) {
+      profileUpdate.counselorName = studentInfo.counselor.trim()
+    }
+
+    // Parse and update graduation year from HAC cohort year
+    const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
+    if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) {
+      profileUpdate.graduationYear = cohortNum
+    }
+
+    // Update grade level from HAC if available
+    const gradeNum = studentInfo.grade ? parseInt(studentInfo.grade.replace(/\D/g, ''), 10) : NaN
+    if (!isNaN(gradeNum) && gradeNum >= 1 && gradeNum <= 12) {
+      profileUpdate.gradeLevel = gradeNum
+    }
+
+    // Apply user updates (name)
+    if (Object.keys(userUpdate).length > 0) {
+      await prisma.user.update({ where: { id: userId }, data: userUpdate })
+      console.log('[GRADES ROUTER] Synced user from HAC:', userUpdate)
+    }
+
+    // Apply profile updates (counselor, graduation year, grade level)
+    // Note: satScore, actScore, futureDecision are NOT overwritten — those are user-set
+    let syncedProfile: Record<string, unknown> | null = null
+    if (Object.keys(profileUpdate).length > 0) {
+      syncedProfile = await prisma.profile.upsert({
+        where: { userId },
+        create: { userId, ...profileUpdate },
+        update: profileUpdate,
+      }) as Record<string, unknown>
+      console.log('[GRADES ROUTER] Synced profile from HAC:', profileUpdate)
+    }
+
+    // Get the updated user name
+    const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } })
+
+    res.json({
+      data: {
+        synced: true,
+        name: updatedUser?.name ?? null,
+        profile: syncedProfile,
+        studentInfo: {
+          name: studentInfo.name,
+          grade: studentInfo.grade,
+          school: studentInfo.school,
+          district: studentInfo.district,
+          counselor: studentInfo.counselor,
+          cohortYear: studentInfo.cohortYear,
+        },
+      },
+    })
+  } catch (err: unknown) {
+    sendError(res, 'SYNC_PROFILE', err, 'SYNC_ERROR')
   }
 })
 
