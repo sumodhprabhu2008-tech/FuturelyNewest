@@ -1,20 +1,15 @@
 import app from './app'
 import { logger } from './common/logger'
-import { WebSocketServer, WebSocket } from 'ws'
+import { WebSocketServer } from 'ws'
 import http from 'http'
 import jwt from 'jsonwebtoken'
+import { clients, userClients } from './lib/websocket'
 
 const PORT = Number(process.env.PORT ?? '3001')
 const JWT_SECRET = process.env.JWT_SECRET ?? 'nextstep-dev-secret-change-in-production'
 
 const server = http.createServer(app)
 const wss = new WebSocketServer({ server })
-
-// All connected clients (for broadcast)
-const clients = new Set<WebSocket>()
-
-// userId → set of connections (for targeted delivery)
-const userClients = new Map<number, Set<WebSocket>>()
 
 wss.on('connection', (ws) => {
   clients.add(ws)
@@ -47,24 +42,6 @@ wss.on('connection', (ws) => {
     }
   })
 })
-
-// Broadcast to all connected clients
-export const broadcast = (event: string, data: unknown) => {
-  const message = JSON.stringify({ event, data })
-  clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(message)
-  })
-}
-
-// Send to a specific user's WebSocket connections
-export const sendToUser = (userId: number, event: string, data: unknown) => {
-  const connections = userClients.get(userId)
-  if (!connections) return
-  const message = JSON.stringify({ event, data })
-  connections.forEach((ws) => {
-    if (ws.readyState === WebSocket.OPEN) ws.send(message)
-  })
-}
 
 server.listen(PORT, '0.0.0.0', () => {
   logger.info('NextStep API started', {

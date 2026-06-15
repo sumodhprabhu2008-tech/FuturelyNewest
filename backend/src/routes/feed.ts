@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma';
-import { broadcast, sendToUser } from '../index';
+import { broadcast, sendToUser } from '../lib/websocket';
 import { filterContent } from '../lib/contentFilter';
 
 const router = Router();
@@ -33,8 +33,9 @@ function toFeedUser(u: RawUser) {
   return { id: u.id, name: u.name, email: u.email, tag: u.tag, tagColor: u.tagColor };
 }
 
-function parseAllTags(raw: string): Array<{ tag: string; tagColor: string }> {
-  try { return JSON.parse(raw) as Array<{ tag: string; tagColor: string }>; } catch { return []; }
+function parseAllTags(raw: unknown): Array<{ tag: string; tagColor: string }> {
+  if (Array.isArray(raw)) return (raw as Array<{ tag?: unknown; tagColor?: unknown }>).filter(t => t?.tag).map(t => ({ tag: String(t.tag), tagColor: String(t.tagColor ?? 'grey') }))
+  try { return JSON.parse(String(raw ?? '[]')) as Array<{ tag: string; tagColor: string }>; } catch { return []; }
 }
 
 /* ---------- helpers: giveaway auto-draw ---------- */

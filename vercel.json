@@ -7,7 +7,7 @@
     "backend": {
       "root": "backend",
       "routePrefix": "/api",
-      "entrypoint": "api/index.js"
+      "entrypoint": "api/index.ts"
     }
   }
 }

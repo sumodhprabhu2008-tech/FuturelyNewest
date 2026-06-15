@@ -114,7 +114,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response): Promise<v
     const assignment = await prisma.assignment.create({
       data: {
         title: title.trim(),
-        subject: subject?.trim() || null,
+        subject: subject?.trim() ?? '',
         dueDate: parsedDate,
         dueTime: dueTime?.trim() || null,
         userId: req.userId,
