@@ -1,0 +1,232 @@
+[INFO] 04:53:45 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+⚠️  [DEV] Auth bypass active — requests will use real JWT userId or fall back to userId=1
+⚠️  [DEV] Set ENABLE_DEV_INTEGRATION_AUTH_BYPASS=false before any real testing
+{"level":"info","message":"NextStep API started","timestamp":"2026-06-14T09:54:01.177Z","port":3001,"url":"http://0.0.0.0:3001"}
+[REQ] GET /health
+[REQ] content-type: undefined
+[REQ] auth header exists: false
+[REQ] POST /api/integrations/grades/hac/login
+[REQ] content-type: application/json
+[REQ] auth header exists: false
+[REQ] body: {
+  username: 'K2308016',
+  baseUrl: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn',
+  password: '[hidden]'
+}
+[GRADES ROUTER] HAC login route hit
+[GRADES ROUTER] HAC login parsed: {
+  userId: 1,
+  baseUrl: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn',
+  usernameExists: true,
+  passwordExists: true,
+  hasClSessionCookie: false
+}
+[GRADES ROUTER] Calling loginHAC: {
+  resolvedBaseUrl: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn',
+  userId: 1
+}
+[HAC CLIENT] loginHAC started {
+  baseUrl: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn',
+  link: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn/',
+  origin: 'https://homeaccess.katyisd.org/',
+  userId: 1,
+  usernameExists: true,
+  passwordExists: true,
+  hasClSessionCookie: false
+}
+[HAC CLIENT] Fetching login page: https://homeaccess.katyisd.org/HomeAccess/Account/LogOn
+[HAC CLIENT] Login page fetched {
+  status: 200,
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Account/LogOn',
+  htmlLength: 15601
+}
+[HAC CLIENT] Verification token found: true
+[HAC CLIENT] Login form fields: [
+  '__RequestVerificationToken',
+  'SCKTY00328510CustomEnabled',
+  'SCKTY00436568CustomEnabled',
+  'Database',
+  'VerificationOption',
+  'LogOnDetails.UserName',
+  'tempUN',
+  'tempPW',
+  'LogOnDetails.Password',
+  'LogOnDetails_UserName',
+  'LogOnDetails_Password'
+]
+[HAC CLIENT] Posting HAC login form: https://homeaccess.katyisd.org/HomeAccess/Account/LogOn
+[HAC CLIENT] Login POST completed {
+  status: 200,
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic',
+  htmlLength: 29269,
+  title: 'Demographic',
+  bodyPreview: "Skip to main content Katy ISD Soma Srikara Sai Vattem My Alerts My Account Logout $(function () { SunGard.Common.AddResource('Cancel', 'Cancel'); SunGard.Common.AddResource('Submit', 'Submit'); SunGard.Common.AddResource('EnrollNewStudent', 'Enroll New Student'); SunGard.Common.AddResource('ChangeStudentTitle', 'Choose Your Student'); var $identity = $('.sg-menu-element-identity'); var $identityTrigger = $identity.children('span[tabindex]'); $identity.on('focusin', function () { $(this).addClass"
+}
+[HAC CLIENT] POST redirected to non-login page: https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic
+[HAC CLIENT] Verifying session via Demographic page: https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic
+[HAC CLIENT] Demographic verification response {
+  status: 200,
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic',
+  htmlLength: 28438,
+  bodyPreview: '\r\n' +
+    '<!DOCTYPE html>\r\n' +
+    '\r\n' +
+    '<html lang="en">\r\n' +
+    '    <head>\r\n' +
+    '        <meta charset="utf-8" />\r\n' +
+    '\r\n' +
+    '        \r\n' +
+    '    \r\n' +
+    '    \r\n' +
+    '\r\n' +
+    '\r\n' +
+    '        <meta http-equiv="X-UA-Compatible" content="IE=edge" />\r\n' +
+    '            <title>Demographic</title>\r\n' +
+    '        \r\n' +
+    '\r\n' +
+    '        <!-- 3rd party CSS our globals override -->\r\n' +
+    '<link  href="/HomeAccess/Stylesheets/Themes/Base/css?v=ErOiUuOsVp6tquD2fInmzTQl3A3SlFxTXp8j5mZ8LI01" type="text/css" rel="stylesheet" />\r\n' +
+    '<link  href="/HomeAccess/Stylesheets/SunGard/sungard-font-awesome.css" type="te'
+}
+[HAC CLIENT] Login verified — landed on: https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic (Demographic page is normal)
+[HAC CLIENT] Saving session — baseUrl (clean origin): https://homeaccess.katyisd.org/
+[HAC CLIENT] Saving session — cookie lookup domain (no slash): https://homeaccess.katyisd.org
+[HAC CLIENT] Saving session with cookies: [
+  { key: 'ASP.NET_SessionId', domain: 'homeaccess.katyisd.org' },
+  { key: 'SPIHACSiteCode', domain: 'homeaccess.katyisd.org' },
+  {
+    key: '__RequestVerificationToken_L0hvbWVBY2Nlc3M1',
+    domain: 'homeaccess.katyisd.org'
+  },
+  { key: '.AuthCookie', domain: 'homeaccess.katyisd.org' }
+]
+[HAC CLIENT] No .ASPXAUTH but session cookie found — proceeding
+[HAC CLIENT] HAC session saved { userId: 1, hasSessionToken: true }
+[GRADES ROUTER] loginHAC success: { hasSessionToken: true }
+[GRADES ROUTER] Auto-assigned DEV role + tag for HAC user: K2308016
+[GRADES ROUTER] Background sync starting for userId: 1
+[HAC CLIENT] Fetching student info from: https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic
+[HAC CLIENT] Demographic page response {
+  status: 200,
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Registration/Demographic',
+  htmlLength: 28438
+}
+[HAC CLIENT] Demographic page has iframe — fetching: https://homeaccess.katyisd.org/HomeAccess/Content/Student/Registration.aspx
+[HAC CLIENT] Iframe content fetched: { htmlLength: 10593 }
+[DEBUG] Wrote C:\Users\srika\Futurely-main\backend\src\debug_demographic.html
+[HAC CLIENT] All spans with IDs on demographic page:
+  #plnMain_lblRegStudentName = "Vattem, Soma Srikara Sai"
+  #plnMain_lblBirthDate = "2/16/2010"
+  #plnMain_lblCounselor = "Marshall, Tanya"
+  #plnMain_lblBuildingName = "Jordan HS"
+  #plnMain_lblCalendar = "Eligible - Full Day Membership"
+  #plnMain_lblGrade = "11"
+  #plnMain_lblLanguage = "English"
+  #plnMain_lblDateEnteredGrade9 = "8/16/2023"
+  #plnMain_lblCohortYear = "2027"
+  #plnMain_lblGraduationPlan = "FHSPE - Foundation HS Program w/ Endorsement"
+  #plnMain_lblEndorsements = "ART - Arts/Humanities EndorsementDLA - Distinquished Level AchievementMD - Multi"
+  #plnMain_lblSpeechReqMetDate = "12/20/2024"
+  #plnMain_lblCPRInstrMetDate = "12/19/2025"
+  #plnMain_PeaceOfficerInstrMetDate = "10/27/2023"
+[HAC CLIENT] All labels and key divs:
+  label: "Student Name:"
+  label: "Birth Date:"
+  label: "Counselor:"
+  label: "Building:"
+  label: "Calendar:"
+  label: "Grade:"
+  label: "Language:"
+  label: "Graduation Components"
+  label: "Date Entered Grade 9"
+  label: "Cohort Year"
+  label: "Graduation Plan"
+  label: "Endorsements"
+  label: "Financial Aid Requirement"
+  label: "Speech Req Met Date"
+  label: "CPR Instr Met Date"
+  label: "Peace Officer Instr Met Date"
+[HAC CLIENT] Student info found via selector "#plnMain_lblCounselor": "Marshall, Tanya"
+[HAC CLIENT] Student info found via selector "#plnMain_lblCohortYear": "2027"
+[HAC CLIENT] Final student info: { counselor: 'Marshall, Tanya', cohortYear: '2027' }
+[HAC CLIENT] Student info found via selector "#plnMain_lblRegStudentName": "Vattem, Soma Srikara Sai"
+[HAC CLIENT] Student info found via selector "#plnMain_lblGrade": "11"
+[HAC CLIENT] Student info found via selector "#plnMain_lblBuildingName": "Jordan HS"
+[GRADES ROUTER] Background sync: updated user name: Vattem, Soma Srikara Sai
+[HAC CLIENT] Fetching classwork from: https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork
+[HAC CLIENT] Classwork page: {
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork',
+  pageTitle: 'Classwork',
+  htmlLength: 28565
+}
+[HAC CLIENT] Outer page is a shell — fetching iframe content: https://homeaccess.katyisd.org/HomeAccess/Content/Student/Assignments.aspx
+[HAC CLIENT] Iframe content fetched: { htmlLength: 293629 }
+[HAC CLIENT] Grade periods found: [ '(All Runs)', '1', '2', '3', '4', '5', '6' ] current: 2 dropdown: ctl00$plnMain$ddlReportCardRuns
+[DEBUG] Wrote C:\Users\srika\Futurely-main\backend\src\debug_classwork.html
+[HAC CLIENT] Classwork page structure check: {
+  hasAssignmentClass: 12,
+  hasSgHeader: 13,
+  hasClassBlock: 0,
+  hasAssignmentGrid: 0,
+  hasRptAssig: 90,
+  hasClassGrade: 0,
+  tableCount: 22,
+  divCount: 78
+}
+[HAC CLIENT] Using Strategy 1: .AssignmentClass
+[HAC CLIENT] Parsed 12 classes from classwork page
+[GRADES ROUTER] Background sync: synced 23 assignments for userId: 1
+[GRADES ROUTER] Background sync complete for userId: 1
+[REQ] GET /api/integrations/grades/hac/grades?sessionToken=
+[REQ] content-type: application/json
+[REQ] auth header exists: true
+[REQ] GET /api/integrations/grades/classwork
+[REQ] content-type: undefined
+[REQ] auth header exists: false
+[HAC CLIENT] Fetching classwork from: https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork
+[HAC CLIENT] Classwork page: {
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork',
+  pageTitle: 'Classwork',
+  htmlLength: 28565
+}
+[HAC CLIENT] Outer page is a shell — fetching iframe content: https://homeaccess.katyisd.org/HomeAccess/Content/Student/Assignments.aspx
+[HAC CLIENT] Iframe content fetched: { htmlLength: 293629 }
+[HAC CLIENT] Grade periods found: [ '(All Runs)', '1', '2', '3', '4', '5', '6' ] current: 2 dropdown: ctl00$plnMain$ddlReportCardRuns
+[DEBUG] Wrote C:\Users\srika\Futurely-main\backend\src\debug_classwork.html
+[HAC CLIENT] Classwork page structure check: {
+  hasAssignmentClass: 12,
+  hasSgHeader: 13,
+  hasClassBlock: 0,
+  hasAssignmentGrid: 0,
+  hasRptAssig: 90,
+  hasClassGrade: 0,
+  tableCount: 22,
+  divCount: 78
+}
+[HAC CLIENT] Using Strategy 1: .AssignmentClass
+[HAC CLIENT] Parsed 12 classes from classwork page
+[REQ] GET /api/integrations/grades/classwork
+[REQ] content-type: undefined
+[REQ] auth header exists: false
+[HAC CLIENT] Fetching classwork from: https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork
+[HAC CLIENT] Classwork page: {
+  finalUrl: 'https://homeaccess.katyisd.org/HomeAccess/Classes/Classwork',
+  pageTitle: 'Classwork',
+  htmlLength: 28565
+}
+[HAC CLIENT] Outer page is a shell — fetching iframe content: https://homeaccess.katyisd.org/HomeAccess/Content/Student/Assignments.aspx
+[HAC CLIENT] Iframe content fetched: { htmlLength: 293629 }
+[HAC CLIENT] Grade periods found: [ '(All Runs)', '1', '2', '3', '4', '5', '6' ] current: 2 dropdown: ctl00$plnMain$ddlReportCardRuns
+[DEBUG] Wrote C:\Users\srika\Futurely-main\backend\src\debug_classwork.html
+[HAC CLIENT] Classwork page structure check: {
+  hasAssignmentClass: 12,
+  hasSgHeader: 13,
+  hasClassBlock: 0,
+  hasAssignmentGrid: 0,
+  hasRptAssig: 90,
+  hasClassGrade: 0,
+  tableCount: 22,
+  divCount: 78
+}
+[HAC CLIENT] Using Strategy 1: .AssignmentClass
+[HAC CLIENT] Parsed 12 classes from classwork page

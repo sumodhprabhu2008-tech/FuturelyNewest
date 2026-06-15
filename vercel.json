@@ -3,6 +3,10 @@
   "buildCommand": "npx prisma generate --schema=backend/prisma/schema.prisma && next build",
   "builds": [
     {
+      "src": "package.json",
+      "use": "@vercel/next"
+    },
+    {
       "src": "backend/api/index.ts",
       "use": "@vercel/node"
     }
@@ -10,11 +14,12 @@
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "backend/api/index.ts"
+      "dest": "/backend/api/index.ts"
     },
     {
       "src": "/ws/(.*)",
-      "dest": "backend/api/index.ts"
-    }
+      "dest": "/backend/api/index.ts"
+    },
+    { "handle": "filesystem" }
   ]
 }

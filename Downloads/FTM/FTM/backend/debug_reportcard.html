@@ -1,0 +1,1440 @@
+
+
+<!DOCTYPE html>
+<html>
+<head><title>
+	HomeAccess
+</title>
+    
+    <link href="/HomeAccess/Stylesheets/Themes/Base/css?v=ErOiUuOsVp6tquD2fInmzTQl3A3SlFxTXp8j5mZ8LI01" rel="Stylesheet" type="text/css" /> 
+
+    
+    <link rel="Stylesheet" href="/HomeAccess/eSchoolPLUSResource/GetEmbeddedStyle?file=CrossSite" />
+    <link rel="Stylesheet" href="/HomeAccess/eSchoolPLUSResource/GetEmbeddedStyle?file=ComboBox" />
+    <link rel="Stylesheet" href="/HomeAccess/Stylesheets/Common/font-awesome.css" />
+    
+    
+    <link rel="Stylesheet" href="/HomeAccess/Stylesheets/Site.css" />
+    <link rel="stylesheet" href="/HomeAccess/Stylesheets/Frame/Frame.css" /> 
+    <link rel="SHORTCUT ICON" href="/HomeAccess/Media/Themes/Base/Common/favicon.ico"/>
+    <style>
+        .sg-asp-table-header-row,
+        .ui-jqgrid-view .ui-jqgrid-hdiv, 
+        .ui-jqgrid tr.ui-jqgrid-labels th  {
+	        background-color: #00427c;
+            color: #FFFFFF;
+        }
+    </style>
+
+    <script src="/HomeAccess/Scripts/libs/jquery?v=qIcuP3UP_aRnf7YSojJ0X96urcPMuU40OLTAhIFZUhU1" type="text/javascript"></script>   
+    <script src="/HomeAccess/Scripts/libs/modernizr-2.8.3.js" type="text/javascript"></script>   
+    <script src="/HomeAccess/Scripts/Trirand/ui.multiselect.js" type="text/javascript" ></script>
+    <script src="/HomeAccess/Scripts/Trirand/i18n/grid.locale-en.js" type="text/javascript"></script>
+    <script src="/HomeAccess/Scripts/Trirand/jquery.jqGrid.js" type="text/javascript"></script>
+    <script src="/HomeAccess/Scripts/libs/json2.js" type="text/javascript"></script>
+    <script src="/HomeAccess/eSchoolPLUSResource/GetEmbeddedScript?file=SungardCommon" type="text/javascript"></script>    
+    <script src="/HomeAccess/eSchoolPLUSResource/GetEmbeddedScript?file=Combobox" type="text/javascript"></script>
+    <script type="text/javascript">
+        $(function () {
+            parseForComboBoxes();
+        });
+    </script>    
+    
+
+    <script type="text/javascript">
+        $(SunGard.Common.Init('/HomeAccess/'));
+    </script>
+    
+    
+        
+    <script type="text/javascript" src="OpenClassPopUp.js"></script>
+    <script type="text/javascript" >
+        function PrintReportCard() {
+            
+            window.open("/HomeAccess/Grades/PrintReportCard/" + $("#plnMain_hdnSchoolYear").val() + "-" + $("#plnMain_hdnRCRun").val());
+            return false;
+        }
+    </script>
+    <script type="text/javascript" >
+        function PrintReportCardDetail() {
+            window.open("ReportCardDetailReport.aspx?rcrun=" +  $("#plnMain_hdnRCRun").val() + "&type=rc", null, "status=no,menubar=no,toolbar=no,top=50,left=50,width=600,height=450");
+                return false;
+        }
+    </script>
+    <script type="text/javascript" src="AssignmentsFromRCPopUp.js"></script>
+    <script type="text/javascript" src="/HomeAccess/Content/Common/Validation.js"></script>
+    <script type="text/javascript" src="ReportCards.js"></script>
+	</head>
+<body>
+    
+    <div id='MainContent' class='sg-main-content'>
+        <div class='sg-hac-content'>
+            <form method="post" action="./ReportCards.aspx" onsubmit="javascript:return WebForm_OnSubmit();" id="fmMain">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="cNmTkUthHTFphEIkm8eENu0YszUhrgdaWHw49WIY+rtNVcHdpdk3qRi0N72Uax1PTabrEkfu4WuIMeC1attNqPLu4ln8AdeRBKM2p+JagnOPj60NOiPwphm25l3hvGYXwWgYkyiG+cgJiMPC2wOaL3Q3Cnz5SdbaLdHmaHmvmBCg1nL/OJ+Ymwm9ISnK1WGot0SkcImhYloj4QAOo6fRPN3OGzp9gT0eaMKYuxlBVnFxlJWE22A06rTW7+p4iSqoRTGFO0ZYpplxHxJlEIveqMMGcDryPEcnhuLkhb7t2Xkop1v3ByBaY4xbNqrevwb04xbofWsKYLnICJlnsIO5mgJZ6rGrb+6Hp1bkhEFi8LjwxxvK0es3Mw9iCIk5Qm/qxWDirf+XQfX9+eYPhgoD9A3T4vXZmyotwvU84AUT9QaZu1MxK0TQJ/OgE3aVWpHKuxef5oLeyuGm6nmbL+lgqWYUd9R/H4V0wuHv4lXLThQ1ujNjTHUFHEmn9EqjcV0lVaT9O5qLtf91XKNrpTNoFQDbk/wB36OCZjoRkP08qYKGJkSC6Jgybp6aJexLLWdbo0AmTxGLjjfGZR4h8f8TS3rXofLPj7xKVymPxBUVv37jT3XVAYZuSWWQu2qA3ONzGGWt8kmUtvSksN6YQLUdgw5J/5PHfFGl/Q6WBYkPFX/TM1OmEZMbv9axzmSyfk0p" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['fmMain'];
+if (!theForm) {
+    theForm = document.fmMain;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+
+<script src="/HomeAccess/WebResource.axd?d=x2nkrMJGXkMELz33nwnakNqx0lecQyU_Gk6uYb4hg-RAmzgXsFhB7W0fF8900rRMw_k89b-qEANHKt8QXHquWAsF3tiYN4Q8rwZKkJhTVR81&amp;t=638901591720898773" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+function WebForm_OnSubmit() {
+if (typeof(ValidatorOnSubmit) == "function" && ValidatorOnSubmit() == false) return false;
+return true;
+}
+//]]>
+</script>
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="DF83DEEA" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="/6gNq0Qb//W7cdvrGu58wcF4a3ZJlaRLtKB0g1ynKo++7VeC5obmpxtio/MqcZZi7RrWU88aiSMkF61BU0oP71EJSTFngri4g+hQSDEaTaLrOL7QzfcG6aLF+Z8RjN/8UKUAZop+0HhFRJxLCNCP8RSaSGf4Q9bJk5JQxR5f7Mzp1wrgfTCREI+eBoQh6Kso7k0kWoBPrQPwvEmMEAswRdVti4VLS/bB3OAjE6TgJcq1+T4msMWr4DNSUs8ogKGLVBeKny1XCBRo00Kkq3a0TdeRpaV4pxoo6p8KI5hvVe8k0P3lLpDSUCSK7FTCu0UQYIdZwjU1C5OMv+c/+yxS5SbUac2oOUobYU+pirdghestUwQZfrLRpWfSE/XAmY1JRjj7rsdLrs33VKMphTjTSpL8xI+biUDGlmhRxv/FY7FCEzndNXSEh9FSV7toC6YxIXWhoPiXyOJfur7WgnPqSPmfvFVV1xK8RDbnU0ri/Swzwo/bSlzDN+x2iBTwBFHBzvOeRTD4Qiz3sHDjNxfzdWmJF/OkUrhzTwkg+BBgkgQ=" />
+</div>
+                
+
+	<div class="sg-header">
+        <input name="ctl00$plnMain$hdnTitle" type="hidden" id="plnMain_hdnTitle" value="Report Card" />
+        <input name="ctl00$plnMain$hdnTitle2" type="hidden" id="plnMain_hdnTitle2" value="Report Card For Reporting Period" />
+        <input name="ctl00$plnMain$hdnRCRun" type="hidden" id="plnMain_hdnRCRun" value="3" />
+        <input name="ctl00$plnMain$hdnSchoolYear" type="hidden" id="plnMain_hdnSchoolYear" value="2026" />
+		<input name="ctl00$plnMain$hdnAcknowledge" type="hidden" id="plnMain_hdnAcknowledge" value="Acknowledge" />
+		<input name="ctl00$plnMain$hdnAcknowledgeTitle" type="hidden" id="plnMain_hdnAcknowledgeTitle" value="Report Card Acknowledgement" />
+		<input name="ctl00$plnMain$hdnAcknowledgeAlert" type="hidden" id="plnMain_hdnAcknowledgeAlert" value="Alert: " />
+		<input name="ctl00$plnMain$hdnAcknowledgeAlertMsg" type="hidden" id="plnMain_hdnAcknowledgeAlertMsg" value="Acknowledge the report card. Type your name to confirm that you have reviewed your student&#39;s information and acknowledge (at the end of the page) viewing the report card." />
+        <input name="ctl00$plnMain$hdnAcknowledgePrefix" type="hidden" id="plnMain_hdnAcknowledgePrefix" value="I, " />
+		<input name="ctl00$plnMain$hdnAcknowledgeMsg" type="hidden" id="plnMain_hdnAcknowledgeMsg" value=", acknowledge that I have reviewed my student&#39;s grades." />
+
+		<label id="plnMain_lblTitle" class="sg-header-heading">Report Card For Reporting Period 3</label>
+        
+
+    </div>
+
+    <div class="sg-content-grid">
+		
+
+        <div class="sg-content-grid-container sg-container-content">
+			<label for="plnMain_ddlRCRuns" id="plnMain_lblRCRuns">View the Report Card for Reporting Period&nbsp;</label>
+                    <select name="ctl00$plnMain$ddlRCRuns" onchange="javascript:setTimeout(&#39;__doPostBack(\&#39;ctl00$plnMain$ddlRCRuns\&#39;,\&#39;\&#39;)&#39;, 0)" id="plnMain_ddlRCRuns" class="sg-combobox">
+	<option value="1-2026-22919">1 - Regular</option>
+	<option value="1-2026-24794">1 - Summer</option>
+	<option value="2-2026-23009">2 - Regular</option>
+	<option selected="selected" value="3-2026-23465">3 - Regular</option>
+	<option value="4-2026-23889">4 - Regular</option>
+	<option value="5-2026-24050">5 - Regular</option>
+	<option value="6-2026-24418">6 - Regular</option>
+
+</select>
+
+						
+				 
+			 
+        </div>
+
+        
+        <div class="sg-content-grid">
+	        <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_dgReportCard" style="border-style:None;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>Period</td><td>Teacher</td><td>Room</td><td>Att.Credit</td><td>Ern.Credit</td><td>1ST</td><td>2ND</td><td>3RD</td><td>EXM1</td><td>SEM1</td><td>4TH</td><td>5TH</td><td>6TH</td><td>EXM2</td><td>SEM2</td><td>CND1</td><td>CND2</td><td>CND3</td><td>CND4</td><td>CND5</td><td>CND6</td><td>C1</td><td>C2</td><td>C3</td><td>C4</td><td>C5</td><td>EXDA</td><td>UEXA</td><td>EXDT</td><td>UEXT</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0261A - 7</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3295210'); return false;">ALG 2A</a>
+				        </td><td align="center">1            </td><td><a href="mailto:CarrieRHaire@KATYISD.ORG">Haire, Carrie</a></td><td>2355 </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3295210', '1', '3', '1ST', 'GP', 1); return false;">  77</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3295210', '1', '3', '2ND', 'GP', 2); return false;">  86</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3295210', '1', '3', '3RD', 'GP', 3); return false;">  68</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  71</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  76</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  21</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  22</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0440A - 12</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3296524'); return false;">AQUA SCI A</a>
+				        </td><td align="center">2            </td><td><a href="mailto:StevenACortez@katyisd.org">Cortez, Steven</a></td><td>3334 </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3296524', '1', '3', '1ST', 'GP', 1); return false;">  97</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3296524', '1', '3', '2ND', 'GP', 2); return false;">  86</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3296524', '1', '3', '3RD', 'GP', 3); return false;">  93</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  74</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  89</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>7453A - 1</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3292013'); return false;">TH3TECH</a>
+				        </td><td align="center">3            </td><td><a href="mailto:BryanDCortes@KATYISD.ORG">Cortes, Bryan</a></td><td>1518 </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3292013', '1', '3', '1ST', 'GP', 1); return false;">  100</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3292013', '1', '3', '2ND', 'GP', 2); return false;">  100</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3292013', '1', '3', '3RD', 'GP', 3); return false;">  100</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  100</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  100</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>8540A - 4</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3294512'); return false;">PRIN BUS MKTG FIN A</a>
+				        </td><td align="center">4a           </td><td><a href="mailto:KatherineEJohnson@KATYISD.ORG">Johnson, Katherine</a></td><td>3217 </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3294512', '1', '3', '1ST', 'GP', 1); return false;">  97</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3294512', '1', '3', '2ND', 'GP', 2); return false;">  94</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3294512', '1', '3', '3RD', 'GP', 3); return false;">  96</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  82</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  94</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0020VVIRA - 5</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3247025'); return false;">STUDY HALL (ONLINE) A</a>
+				        </td><td align="center">5b           </td><td><a href="mailto:BrianWPatterson@KATYISD.ORG">Patterson, Brian</a></td><td>M801 </td><td>
+					        0.0000
+				        </td><td>
+					        0.0000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247025', '1', '3', '1ST', 'GP', 1); return false;">  </a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247025', '1', '3', '2ND', 'GP', 2); return false;">  </a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247025', '1', '3', '3RD', 'GP', 3); return false;">  </a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  </a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>8685VA - 2</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3247338'); return false;">NETWORKING I A</a>
+				        </td><td align="center">6b           </td><td><a href="mailto:MichaelRStallings@katyisd.org">Stallings, Michael</a></td><td>M303 </td><td>
+					        1.0000
+				        </td><td>
+					        1.0000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247338', '1', '3', '1ST', 'GP', 1); return false;">  96</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247338', '1', '3', '2ND', 'GP', 2); return false;">  95</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3247338', '1', '3', '3RD', 'GP', 3); return false;">  97</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  90</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  95</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0505VIRF - 1</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3398615'); return false;">HLTH ED</a>
+				        </td><td align="center">14           </td><td><a href="mailto:TamathaCRay@KATYISD.ORG">Ray, Tamatha</a></td><td>N/A  </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398615', '1', '3', '1ST', 'GP', 1); return false;">  97</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398615', '1', '3', '2ND', 'GP', 2); return false;">  95</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398615', '1', '3', '3RD', 'GP', 3); return false;">  90</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  95</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  94</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0336VIRA - 1</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3398628'); return false;">AP EUR HIST A</a>
+				        </td><td align="center">16           </td><td><a href="mailto:SaraRFlora@KATYISD.ORG">Flora, Sara R</a></td><td>N/A  </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398628', '1', '3', '1ST', 'GP', 1); return false;">  98</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398628', '1', '3', '2ND', 'GP', 2); return false;">  90</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3398628', '1', '3', '3RD', 'GP', 3); return false;">  87</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  102</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  93</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>0271VIRA - 101</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3403441'); return false;">AP COMP SCI M A</a>
+				        </td><td align="center">17           </td><td><a href="mailto:JasonETully@KATYISD.ORG">Tully, Jason E</a></td><td>N/A  </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3403441', '1', '3', '1ST', 'GP', 1); return false;">  96</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3403441', '1', '3', '2ND', 'GP', 2); return false;">  83</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3403441', '1', '3', '3RD', 'GP', 3); return false;">  86</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  96</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  90</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>7529VIRA - 3</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3400024'); return false;">AP ART HIST A</a>
+				        </td><td align="center">17           </td><td><a href="mailto:VinoDUnderwood@katyisd.org">Underwood, Vino D</a></td><td>N/A  </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3400024', '1', '3', '1ST', 'GP', 1); return false;">  93</a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3400024', '1', '3', '2ND', 'GP', 2); return false;">  85</a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3400024', '1', '3', '3RD', 'GP', 3); return false;">  86</a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  83</a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  87</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>6991A - 1</td><td>
+					        <a href="#" onclick="OpenClassPopUp('3442235'); return false;">APTASCAL A</a>
+				        </td><td align="center">24           </td><td>Staff</td><td>N/A  </td><td>
+					        0.5000
+				        </td><td>
+					        0.5000
+				        </td><td>
+					        
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3442235', '1', '3', '1ST', 'GP', 1); return false;">  </a>                                   
+                           
+                        </td><td> 
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3442235', '1', '3', '2ND', 'GP', 2); return false;">  </a>                                     
+                               
+                        </td><td>
+                            
+					        <a   href="#" onclick="OpenAssingmentsFromRC('3442235', '1', '3', '3RD', 'GP', 3); return false;">  </a>  
+                                                                  
+                        </td><td>
+                            
+					        <a   return false;">  </a>                                 
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  90</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+		    		        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  S</a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>  
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td> 
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td><td>
+                            
+					        <a   return false;">  </a>  
+                               
+                        </td>
+	</tr>
+</table>
+            <div class="sg-content-grid">
+			    <div id="plnMain_trTotalEarnedCredit" class="sg-gpa-and-credit-info">
+				    <label id="plnMain_lblTotalEarnedCreditM">Total Earned Credit:</label>
+				    <span id="plnMain_lblTotalEarnedCredit">5.5000</span>
+			    </div>
+			    
+	        </div>
+	        <div>
+		        
+                
+	        </div>
+        </div>
+        
+        <script>
+            $(function () {
+                if('False' == 'False')
+                    $('.tdCredit').hide();
+                if ('False' == 'False')
+                    $('.tdGPA').hide();
+            });
+        </script>
+		
+		<div id="plnMain_tbHonorMsg" class="sg-asp-table-group">
+			
+			
+		</div>
+    				
+        
+        <div id="plnMain_lblComments" class="sg-asp-table-group">
+			<div class="sg-header-group">
+				<label id="plnMain_lblCommentLegend">Comment Legend</label>
+			</div>
+			<table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_dgCommentLegend" style="border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Comment</td><td>Description</td>
+	</tr><tr>
+		<td>21</td><td>Low Tests/Projects/Major Assignment Grades/Calificaciones Bajas en Ex&#225;menes/Proyectos/Tareas Importantes</td>
+	</tr><tr>
+		<td>22</td><td>Low Daily/Quiz Grades/Calificaciones Bajas a Diario/Prueba</td>
+	</tr><tr>
+		<td>S</td><td>Average traits and characteristics of conduct/Rasgos y caracter&#237;sticas de conducta promedio</td>
+	</tr>
+</table>
+			
+        </div>
+
+        
+
+        
+	
+    </div>
+<input name="ctl00$plnMain$hdnddlRcRunsSelected" type="hidden" id="plnMain_hdnddlRcRunsSelected" value="3" />
+	<input name="ctl00$plnMain$blnDirty" type="hidden" id="plnMain_blnDirty" />
+	<input name="ctl00$plnMain$txtAction" type="hidden" id="plnMain_txtAction" />
+
+            
+
+<script type="text/javascript">
+//<![CDATA[
+
+var Page_ValidationActive = false;
+if (typeof(ValidatorOnLoad) == "function") {
+    ValidatorOnLoad();
+}
+
+function ValidatorOnSubmit() {
+    if (Page_ValidationActive) {
+        return ValidatorCommonOnSubmit();
+    }
+    else {
+        return true;
+    }
+}
+        //]]>
+</script>
+</form>
+        </div>
+    </div>
+    <script>
+        $(function () {
+            // Build the jQuery UI buttons
+            $('.sg-buttonset').controlgroup();
+            $('.sg-button').button();
+            window.parent.$('.sg-legacy-iframe').height($('.sg-main-content').height()); // set the init size
+            // Increase length of smaller content windows to reduce cutoffs in dropdowns. 
+            var iframeHeight = window.parent.$('.sg-legacy-iframe').height(); 
+            if (iframeHeight < 450)
+            { window.parent.$('.sg-legacy-iframe').height($('.sg-main-content').height() + 200); }
+           
+        })
+    </script>
+</body>
+</html>

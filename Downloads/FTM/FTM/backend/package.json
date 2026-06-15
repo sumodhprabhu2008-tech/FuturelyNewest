@@ -1,0 +1,50 @@
+{
+  "name": "nextstep-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev --respawn src/index.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/index.js",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force && prisma db seed",
+    "seed:students": "ts-node --transpile-only prisma/seedStudents.ts",
+    "demo:students": "ts-node --transpile-only scripts/listDemoStudents.ts"
+  },
+  "prisma": {
+    "seed": "ts-node --project tsconfig.json prisma/seed.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.102.0",
+    "@prisma/client": "^5.22.0",
+    "@types/ws": "^8.18.1",
+    "axios": "^1.16.1",
+    "axios-cookiejar-support": "^4.0.7",
+    "bcryptjs": "^2.4.3",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "tough-cookie": "^6.0.1",
+    "ws": "^8.21.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^20.19.43",
+    "@types/supertest": "^7.2.0",
+    "@types/tough-cookie": "^4.0.5",
+    "@vercel/node": "^5.8.14",
+    "prisma": "^5.22.0",
+    "supertest": "^7.2.2",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.7.2"
+  }
+}

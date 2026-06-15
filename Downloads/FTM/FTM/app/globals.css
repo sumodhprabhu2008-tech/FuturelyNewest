@@ -1,0 +1,216 @@
+:root {
+  --bg: #0B0D12;
+  --surface: #151720;
+  --surface-2: #1C1F28;
+  --surface-3: #222633;
+  --border: #252933;
+  --border-hover: #353A4A;
+  --primary: #00C896;
+  --primary-dark: #00A87E;
+  --primary-dim: rgba(0, 200, 150, 0.08);
+  --primary-glow: rgba(0, 200, 150, 0.18);
+  --accent-blue: #4B6EFF;
+  --text: #E8EDF3;
+  --text-secondary: #6E7A8A;
+  --text-muted: #3D4455;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --orange: #F97316;
+  --error: #EF4444;
+  --info: #58A6FF;
+  --purple: #A78BFA;
+  --sidebar-w: 220px;
+  --page-px: 32px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100%;
+}
+
+a { color: var(--primary); text-decoration: none; }
+button { cursor: pointer; font-family: inherit; font-size: inherit; }
+input, textarea, select { font-family: inherit; font-size: inherit; }
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ── Nav items ──────────────────────────────────────────────────────────── */
+.ns-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+}
+.ns-nav-link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.ns-nav-link.active {
+  background: rgba(0, 200, 150, 0.1);
+  color: var(--primary);
+}
+
+/* ── Cards ──────────────────────────────────────────────────────────────── */
+.ns-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ns-card:hover {
+  border-color: var(--border-hover);
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────────────── */
+.ns-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  height: 42px;
+  box-sizing: border-box;
+}
+.ns-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-dim);
+}
+.ns-input::placeholder { color: var(--text-muted); }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.ns-btn-primary {
+  background: var(--primary);
+  color: #060D10;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-weight: 650;
+  font-size: 14px;
+  cursor: pointer;
+  transition: opacity 0.15s, box-shadow 0.15s;
+}
+.ns-btn-primary:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 20px var(--primary-glow);
+}
+.ns-btn-primary:disabled { opacity: 0.45; box-shadow: none; cursor: not-allowed; }
+
+.ns-btn-ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.ns-btn-ghost:hover {
+  border-color: var(--border-hover);
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+/* ── Gradient text utility ─────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #4B6EFF 0%, #00C896 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Badge chips ─────────────────────────────────────────────────────────── */
+.ns-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  letter-spacing: 0.3px;
+}
+
+/* ── Table rows ─────────────────────────────────────────────────────────── */
+.ns-tr:hover td { background: rgba(255,255,255,0.02); }
+
+/* ── Chip buttons (AI chat) ──────────────────────────────────────────────── */
+.ns-chip {
+  display: block;
+  width: 100%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.ns-chip:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-dim);
+}
+
+/* ── Page fade-in ──────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fadeUp 0.25s ease both; }
+
+/* ── Rainbow animation for DEV tag ──────────────────────────────────────── */
+@keyframes rainbow {
+  0%   { color: #ff6b6b; border-color: #ff6b6b; background: rgba(255,107,107,0.12); }
+  16%  { color: #ffa94d; border-color: #ffa94d; background: rgba(255,169,77,0.12); }
+  32%  { color: #ffd43b; border-color: #ffd43b; background: rgba(255,212,59,0.12); }
+  48%  { color: #69db7c; border-color: #69db7c; background: rgba(105,219,124,0.12); }
+  64%  { color: #38d9a9; border-color: #38d9a9; background: rgba(56,217,169,0.12); }
+  80%  { color: #4dabf7; border-color: #4dabf7; background: rgba(77,171,247,0.12); }
+  100% { color: #ff6b6b; border-color: #ff6b6b; background: rgba(255,107,107,0.12); }
+}
+.tag-rainbow {
+  animation: rainbow 3s linear infinite;
+  font-weight: 700 !important;
+}
+
+/* ── Shimmer loading ─────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from { background-position: -400px 0; }
+  to   { background-position: 400px 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite;
+}

@@ -1,0 +1,595 @@
+
+
+<!DOCTYPE html>
+<html>
+<head><title>
+	HomeAccess
+</title>
+    
+    <link href="/HomeAccess/Stylesheets/Themes/Base/css?v=ErOiUuOsVp6tquD2fInmzTQl3A3SlFxTXp8j5mZ8LI01" rel="Stylesheet" type="text/css" /> 
+
+    
+    <link rel="Stylesheet" href="/HomeAccess/eSchoolPLUSResource/GetEmbeddedStyle?file=CrossSite" />
+    <link rel="Stylesheet" href="/HomeAccess/eSchoolPLUSResource/GetEmbeddedStyle?file=ComboBox" />
+    <link rel="Stylesheet" href="/HomeAccess/Stylesheets/Common/font-awesome.css" />
+    
+    
+    <link rel="Stylesheet" href="/HomeAccess/Stylesheets/Site.css" />
+    <link rel="stylesheet" href="/HomeAccess/Stylesheets/Frame/Frame.css" /> 
+    <link rel="SHORTCUT ICON" href="/HomeAccess/Media/Themes/Base/Common/favicon.ico"/>
+    <style>
+        .sg-asp-table-header-row,
+        .ui-jqgrid-view .ui-jqgrid-hdiv, 
+        .ui-jqgrid tr.ui-jqgrid-labels th  {
+	        background-color: #00427c;
+            color: #FFFFFF;
+        }
+    </style>
+
+    <script src="/HomeAccess/Scripts/libs/jquery?v=qIcuP3UP_aRnf7YSojJ0X96urcPMuU40OLTAhIFZUhU1" type="text/javascript"></script>   
+    <script src="/HomeAccess/Scripts/libs/modernizr-2.8.3.js" type="text/javascript"></script>   
+    <script src="/HomeAccess/Scripts/Trirand/ui.multiselect.js" type="text/javascript" ></script>
+    <script src="/HomeAccess/Scripts/Trirand/i18n/grid.locale-en.js" type="text/javascript"></script>
+    <script src="/HomeAccess/Scripts/Trirand/jquery.jqGrid.js" type="text/javascript"></script>
+    <script src="/HomeAccess/Scripts/libs/json2.js" type="text/javascript"></script>
+    <script src="/HomeAccess/eSchoolPLUSResource/GetEmbeddedScript?file=SungardCommon" type="text/javascript"></script>    
+    <script src="/HomeAccess/eSchoolPLUSResource/GetEmbeddedScript?file=Combobox" type="text/javascript"></script>
+    <script type="text/javascript">
+        $(function () {
+            parseForComboBoxes();
+        });
+    </script>    
+    
+
+    <script type="text/javascript">
+        $(SunGard.Common.Init('/HomeAccess/'));
+    </script>
+    
+    
+    
+    <script type="text/javascript" src="OpenClassPopUp.js"></script>
+    <script type="text/javascript" >
+        function PrintGPADetailReport() {
+            
+            window.open("/HomeAccess/Grades/PrintGPADetailReport");
+            return false;
+        }
+    </script>
+    <script type="text/javascript" src="AssignmentsFromRCPopUp.js"></script>
+    <script type="text/javascript" src="/HomeAccess/Content/Common/Validation.js"></script>
+    <link href="/HomeAccess/StyleSheets/ReportCard/ReportCards.css" type="text/css" rel="stylesheet">
+</head>
+<body>
+    
+    <div id='MainContent' class='sg-main-content'>
+        <div class='sg-hac-content'>
+            <form method="post" action="./Transcript.aspx" id="fmMain">
+<div class="aspNetHidden">
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="yB5IUeommBJNbpZuozSG/foJNMFZo5lJpXi4XSy9cllYO6KucK+jsjQT+V1mys+EiLmXyzJqhLUKUiZzZHuRVdcZXEwMbpRd5+43vrMzG4m9ZPaXtnuNyZFUVLq0V3fC3uMJMakJ72KgV7f1WAMbLwQxjEhdw0ASkKm9rqrM3Q4W71jVCIRq6JoWUyOZyirC" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['fmMain'];
+if (!theForm) {
+    theForm = document.fmMain;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<div class="aspNetHidden">
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="ECC4EA3A" />
+	<input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="XSWlhX1l/Caq5+d0dW5bdy4wbdPEjtnJxSP6jmTM52ViLZCMEwt7alEr/NB2LCdqATkVWhuNYEDr4bJ54H3x/CP9+wlrdH0mHgXq5QGnxH7ILQe1V2/ZpEglz47wFnwbRwH6B1gXLhADh8PwuOKIBNvz/qvZaa387TafF/k9ccdTazvoRiWudiOrNIv6mqNJ" />
+</div>
+                
+
+
+	<div class="sg-header">
+        <input name="ctl00$plnMain$hdnTitle" type="hidden" id="plnMain_hdnTitle" />
+    </div>
+    <div class="sg-content-grid">
+        <div class="sg-content-grid-container sg-container-content">
+			<label for="plnMain_ddlGroupCourses" id="plnMain_lblGroupCourses">Group Courses By:&nbsp;</label>
+            <select name="ctl00$plnMain$ddlGroupCourses" onchange="javascript:setTimeout(&#39;__doPostBack(\&#39;ctl00$plnMain$ddlGroupCourses\&#39;,\&#39;\&#39;)&#39;, 0)" id="plnMain_ddlGroupCourses" class="sg-combobox">
+	<option value="T">Term</option>
+	<option value="D"></option>
+
+</select>
+        </div>
+	    
+	    <table role="presentation"><tr>
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_0" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_0">2021-2022 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_0" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_0">1</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_0" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_0">07</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_0" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_0">Out of Country School</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_0" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S1</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03110100 - 1</td><td>ARABIC 1</td><td align="center">72</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03520100 - 1</td><td>HINDI 1</td><td align="center">85</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_0"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_0">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_0">1.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_1" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_1">2021-2022 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_1" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_1">2</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_1" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_1">07</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_1" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_1">Out of Country School</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_1" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S2</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03110100 - 1</td><td>ARABIC 1</td><td align="center">72</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03520100 - 1</td><td>HINDI 1</td><td align="center">85</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_1"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_1">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_1">1.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    </tr><tr>
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_2" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_2">2022-2023 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_2" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_2">1</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_2" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_2">08</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_2" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_2">Out of Country School</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_2" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S1</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03110200 - 1</td><td>ARABIC 2</td><td align="center">77</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03520200 - 1</td><td>HINDI 2</td><td align="center">72</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_2"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_2">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_2">1.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_3" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_3">2022-2023 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_3" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_3">2</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_3" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_3">08</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_3" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_3">Out of Country School</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_3" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S2</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03110200 - 1</td><td>ARABIC 2</td><td align="center">77</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03520200 - 1</td><td>HINDI 2</td><td align="center">72</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_3"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_3">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_3">1.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    </tr><tr>
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_4" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_4">2023-2024 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_4" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_4">1</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_4" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_4">09</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_4" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_4">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_4" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S1</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03010200 - 1</td><td>BIO</td><td align="center">80</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100500 - 1</td><td>ALG 1</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03220100 - 1</td><td>ENG 1</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03250500 - 1</td><td>TH1TECH</td><td align="center">97</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03320100 - 1</td><td>W GEO</td><td align="center">80</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03440100 - 1</td><td>SPAN 1</td><td align="center">88</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580300 - 1</td><td>APCSPRIN</td><td align="center">76</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03380003 - 1</td><td>SS RES</td><td align="center">93</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_4"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_4">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_4">4.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_5" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_5">2023-2024 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_5" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_5">2</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_5" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_5">09</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_5" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_5">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_5" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S2</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03010200 - 1</td><td>BIO</td><td align="center">84</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100500 - 1</td><td>ALG 1</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03220100 - 1</td><td>ENG 1</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03250500 - 1</td><td>TH1TECH</td><td align="center">97</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03320100 - 1</td><td>W GEO</td><td align="center">84</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03440100 - 1</td><td>SPAN 1</td><td align="center">79</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580300 - 1</td><td>APCSPRIN</td><td align="center">78</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3350100 - 1</td><td>APPSYCH</td><td align="center">95</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_5"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_5">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_5">4.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    </tr><tr>
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_6" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_6">2024-2025 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_6" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_6">1</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_6" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_6">10</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_6" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_6">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_6" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S1</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03040000 - 1</td><td>CHEM</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03050000 - 1</td><td>PHYSICS</td><td align="center">74</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100700 - 1</td><td>GEOM</td><td align="center">84</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03220200 - 1</td><td>ENG 2</td><td align="center">82</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03250600 - 1</td><td>TH2TECH</td><td align="center">99</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3370100 - 1</td><td>APWHIST</td><td align="center">70</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>N1290012 - 1</td><td>LDWRTY</td><td align="center">91</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3220100 - 1</td><td>APENGLAN</td><td align="center">84</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3340100 - 1</td><td>APUSHIST</td><td align="center">94</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_6"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_6">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_6">4.5000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_7" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_7">2024-2025 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_7" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_7">2</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_7" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_7">10</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_7" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_7">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_7" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S2</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03040000 - 1</td><td>CHEM</td><td align="center">80</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03050000 - 1</td><td>PHYSICS</td><td align="center">81</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100700 - 1</td><td>GEOM</td><td align="center">83</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03220200 - 1</td><td>ENG 2</td><td align="center">78</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03250600 - 1</td><td>TH2TECH</td><td align="center">100</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03340400 - 1</td><td>W HIST</td><td align="center">81</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3220100 - 1</td><td>APENGLAN</td><td align="center">84</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3340100 - 1</td><td>APUSHIST</td><td align="center">90</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_7"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_7">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_7">4.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    </tr><tr>
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_8" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_8">2025-2026 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_8" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_8">1</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_8" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_8">11</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_8" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_8">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_8" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S1</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>13027410 - 1</td><td>NETWRLAB</td><td align="center">95</td><td align="right">1.0000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03030000 - 1</td><td>AQUA SCI</td><td align="center">89</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100600 - 1</td><td>ALG 2</td><td align="center">76</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03251100 - 1</td><td>TH3TECH</td><td align="center">100</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>13011200 - 1</td><td>PRINBMF</td><td align="center">94</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580120 - 1</td><td>APTACSAL</td><td align="center">90</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580110 - 1</td><td>APTACSAM</td><td align="center">90</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03810100 - 1</td><td>HLTHED1</td><td align="center">94</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3340200 - 1</td><td>APEUHIST</td><td align="center">93</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3500100 - 1</td><td>APHISART</td><td align="center">87</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_8"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_8">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_8">5.5000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    
+				    <td class="sg-transcript-group" >
+					    <table style="width:100%" role="presentation">
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYear_9" style="font-weight:bold;">Year:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblYearValue_9">2025-2026 School Year</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroup_9" style="font-weight:bold;">Term:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGroupValue_9">2</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGrade_9" style="font-weight:bold;">Grade:</span></td>
+							    <td><span id="plnMain_rpTranscriptGroup_lblGradeValue_9">11</span></td>
+						    </tr>
+						    <tr>
+							    <td><span id="plnMain_rpTranscriptGroup_lblBuilding_9" style="font-weight:bold;">Building:</span></td>
+							    <td colspan=3><span id="plnMain_rpTranscriptGroup_lblBuildingValue_9">Jordan HS</span></td>
+						    </tr>						
+					    </table>														
+
+					    <table class="sg-asp-table" cellspacing="0" rules="all" border="1" id="plnMain_rpTranscriptGroup_dgCourses_9" style="width:100%;border-collapse:collapse;">
+	<tr class="sg-asp-table-header-row">
+		<td>Course</td><td>Description</td><td>S2</td><td>Credit</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>13027410 - 1</td><td>NETWRLAB</td><td align="center">97</td><td align="right">1.0000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03030000 - 1</td><td>AQUA SCI</td><td align="center">90</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03100600 - 1</td><td>ALG 2</td><td align="center">72</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>03251100 - 1</td><td>TH3TECH</td><td align="center">100</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>13011200 - 1</td><td>PRINBMF</td><td align="center">89</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580120 - 1</td><td>APTACSAL</td><td align="center">94</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3580110 - 1</td><td>APTACSAM</td><td align="center">94</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3340200 - 1</td><td>APEUHIST</td><td align="center">92</td><td align="right">0.5000</td>
+	</tr><tr class="sg-asp-table-data-row">
+		<td>A3500100 - 1</td><td>APHISART</td><td align="center">73</td><td align="right">0.5000</td>
+	</tr>
+</table>
+					    <table style="float:right" role="presentation">
+						    <tr>
+							    <td></td>
+							    <td><label id="plnMain_rpTranscriptGroup_lblGPAValue_9"></label></td>			
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditHeader_9">Total Credit:</label></td> 
+							    <td><label id="plnMain_rpTranscriptGroup_LblTCreditValue_9">5.0000</label></td>			
+						    </tr>
+					    </table><br><br>
+			        </td>
+		    </tr><tr>
+				    <tr >
+					    <td>
+						    <table id="plnMain_rpTranscriptGroup_tblCumGPAInfo" class="sg-asp-table">
+	<tr class="sg-asp-table-header-row">
+		<td><label id="plnMain_rpTranscriptGroup_LblGPATypeHeader">GPA Type</label></td>
+		<td><label id="plnMain_rpTranscriptGroup_LblFGPAHeader">GPA</label></td>
+		<td id="plnMain_rpTranscriptGroup_tdGPARankHeader"><label id="plnMain_rpTranscriptGroup_lblGPARankHeader">Rank</label></td>
+		<td id="plnMain_rpTranscriptGroup_td_SCKTY00389675GPAQuartileHeader"><label id="plnMain_rpTranscriptGroup_lbl_SCKTY00389675GPAQuartileHeader">Quartile</label></td>
+	</tr>
+	<tr id="plnMain_rpTranscriptGroup_trGPA3" class="sg-asp-table-data-row">
+		<td><span id="plnMain_rpTranscriptGroup_lblGPADescr3">Weighted GPA*</span></td>
+		<td><span id="plnMain_rpTranscriptGroup_lblGPACum3">3.2833</span></td>
+		<td id="plnMain_rpTranscriptGroup_tdGPARank3"><span id="plnMain_rpTranscriptGroup_lblGPARank3">710 / 903</span></td>
+		<td id="plnMain_rpTranscriptGroup_td_SCKTY00389675GPAQuartile3"><span id="plnMain_rpTranscriptGroup_lbl_SCKTY00389675GPAQuartile3">4</span></td>
+	</tr>
+	<tr id="plnMain_rpTranscriptGroup_trGPA4" class="sg-asp-table-data-row">
+		<td><span id="plnMain_rpTranscriptGroup_lblGPADescr4">Unweighted GPA*</span></td>
+		<td><span id="plnMain_rpTranscriptGroup_lblGPACum4">3.0333</span></td>
+		<td id="plnMain_rpTranscriptGroup_tdGPARank4"></td>
+		<td id="plnMain_rpTranscriptGroup_td_SCKTY00389675GPAQuartile4"></td>
+	</tr>
+</table>
+
+
+					    </td>	
+                    </tr>
+                    <tr >
+					    <td>					    
+                        
+                        </td>	
+				    </tr>
+			    </table>
+		    
+    </div>
+
+            </form>
+        </div>
+    </div>
+    <script>
+        $(function () {
+            // Build the jQuery UI buttons
+            $('.sg-buttonset').controlgroup();
+            $('.sg-button').button();
+            window.parent.$('.sg-legacy-iframe').height($('.sg-main-content').height()); // set the init size
+            // Increase length of smaller content windows to reduce cutoffs in dropdowns. 
+            var iframeHeight = window.parent.$('.sg-legacy-iframe').height(); 
+            if (iframeHeight < 450)
+            { window.parent.$('.sg-legacy-iframe').height($('.sg-main-content').height() + 200); }
+           
+        })
+    </script>
+</body>
+</html>

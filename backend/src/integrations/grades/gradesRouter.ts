@@ -1,4 +1,4 @@
-import { Router, Response } from 'express'
+import { Router, Response, NextFunction, Request } from 'express'
 import { z } from 'zod'
 import { AuthRequest } from '../../middleware/auth'
 import {
@@ -20,13 +20,11 @@ import {
 import { buildSessionWithCLCookie } from './classLinkHelper'
 import { getSessionByUserId, getSessionByToken, deleteSessionByUserId, restoreSessionFromCache, touchSession, type SchoolSystemType } from './sessionStore'
 import { prisma } from '../../lib/prisma'
+import { APIError, AuthenticationError } from './errors'
 import { normalizeHacGrades, normalizePsGrades } from './normalizeGrades'
 import { encryptPassword, decryptPassword } from './credentialCrypto'
 
 const router = Router()
-const HAC_REFRESH_AFTER_MS = 45 * 60 * 1000
-
-type ResolvedSchoolSession = NonNullable<ReturnType<typeof getSessionByUserId>>
 
 // ── URL normalizer (mirrors extractOrigin in hacClient) ───────────────────────
 // Ensures the baseUrl stored in the session always ends with a trailing slash
@@ -108,7 +106,7 @@ function computeGPA(grades: Array<{ average: string | null; grade?: string | nul
 
   if (!points.length) return null
 
-  return Math.round((points.reduce((a, b) => a + b, 0) / points.length) * 1000) / 1000
+  return Math.round((points.reduce((a, b) => a + b, 0) / points.length) * 100) / 100
 }
 
 // ── Error helpers ──────────────────────────────────────────────────────────────
@@ -151,7 +149,8 @@ function statusFromError(message: string, status?: number): number {
 
 function sendError(res: Response, label: string, err: unknown, fallbackCode: string): void {
   const details = getErrorDetails(err)
-  const status = statusFromError(details.message, details.status)
+  // Typed errors carry their own status — use it directly
+  const status = err instanceof APIError ? err.status : statusFromError(details.message, details.status)
 
   console.error(`[${label}] FAILED`, {
     message: details.message,
@@ -164,7 +163,7 @@ function sendError(res: Response, label: string, err: unknown, fallbackCode: str
   res.status(status).json({
     data: null,
     error: {
-      code: fallbackCode,
+      code: err instanceof AuthenticationError ? 'AUTH_ERROR' : fallbackCode,
       message: details.message,
       details: {
         code: details.code,
@@ -175,36 +174,24 @@ function sendError(res: Response, label: string, err: unknown, fallbackCode: str
   })
 }
 
-function isExpiredSchoolSessionError(err: unknown): boolean {
-  const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()
-  return (
-    message.includes('school session expired') ||
-    message.includes('please log in again') ||
-    message.includes('login form still present')
-  )
-}
-
-async function runWithAutoRelogin<T>(
-  userId: number,
-  entry: ResolvedSchoolSession,
-  action: (activeEntry: ResolvedSchoolSession) => Promise<T>,
-): Promise<T> {
-  try {
-    const result = await action(entry)
-    touchSession(userId)
-    return result
-  } catch (err) {
-    if (!isExpiredSchoolSessionError(err)) throw err
-
-    console.warn('[GRADES ROUTER] School session rejected by portal; attempting one auto-relogin for userId:', userId)
-    deleteSessionByUserId(userId)
-
-    const reloginResult = await autoRelogin(userId)
-    if (!reloginResult?.session) throw err
-
-    const result = await action(reloginResult.session)
-    touchSession(userId)
-    return result
+// asyncHandler: ensures uncaught async errors always produce JSON + correct CORS headers.
+// Login/session pattern adapted from gradexis-api (Apache-2.0): github.com/ruskcoder/gradexis-api
+function asyncHandler(
+  fn: (req: AuthRequest, res: Response, next: NextFunction) => Promise<void>
+) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req as AuthRequest, res, next)).catch(err => {
+      if (!res.headersSent) {
+        const status = err instanceof APIError ? err.status : 500
+        res.status(status).json({
+          data: null,
+          error: {
+            code: err instanceof AuthenticationError ? 'AUTH_ERROR' : 'INTERNAL_ERROR',
+            message: err instanceof Error ? err.message : 'Internal server error',
+          },
+        })
+      }
+    })
   }
 }
 
@@ -240,7 +227,7 @@ async function autoRelogin(userId: number): Promise<{ token: string; session: Re
   // Determine which credentials to use
   const isHAC = connection.systemType === 'HAC'
   const username = connection.hacUsername
-  const encryptedPassword = isHAC ? connection.hacPasswordEncrypted : connection.psPasswordEncrypted
+  const encryptedPassword = connection.encryptedPassword
 
   if (!username || !encryptedPassword) {
     console.log('[GRADES ROUTER] No stored credentials for auto-relogin, userId:', userId)
@@ -329,6 +316,114 @@ async function resolveSession(userId: number, res: Response): Promise<ReturnType
   }
 
   return entry
+}
+
+// ── Staleness threshold ────────────────────────────────────────────────────────
+const SYNC_STALE_MS = 15 * 60 * 1000 // 15 minutes
+
+function isCacheStale(lastSynced: Date | null): boolean {
+  if (!lastSynced) return true
+  return Date.now() - lastSynced.getTime() > SYNC_STALE_MS
+}
+
+// ── Background grade sync ──────────────────────────────────────────────────────
+// Fired without await after /hac/login responds. Updates syncStatus on
+// SchoolConnection so the client can poll GET /sync-status.
+async function runBackgroundSync(userId: number, sessionToken: string): Promise<void> {
+  console.log('[GRADES ROUTER] Background sync starting for userId:', userId)
+
+  // Persist session cookie immediately so restart-recovery works even if sync fails
+  try {
+    const stored = getSessionByToken(sessionToken)
+    if (stored) {
+      await prisma.schoolConnection.update({
+        where: { userId },
+        data: { cachedSession: stored.sessionData },
+      })
+    }
+  } catch (e) {
+    console.warn('[GRADES ROUTER] Background sync: could not persist session:', e instanceof Error ? e.message : String(e))
+  }
+
+  // Staleness check — skip re-scrape if data is fresh
+  const connection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
+  if (connection && !isCacheStale(connection.lastSynced)) {
+    console.log('[GRADES ROUTER] Background sync skipped — data fresh, last synced:', connection.lastSynced)
+    await prisma.schoolConnection.update({ where: { userId }, data: { syncStatus: 'complete' } }).catch(() => {})
+    return
+  }
+
+  // Mark sync in progress
+  await prisma.schoolConnection.update({
+    where: { userId },
+    data: { syncStatus: 'syncing', syncError: null },
+  }).catch(() => {})
+
+  try {
+    const entry = getSessionByUserId(userId)
+    if (!entry) throw new Error('Session expired before sync could run')
+
+    if (entry.session.systemType === 'HAC') {
+      // Sync student info into User + Profile
+      try {
+        const studentInfo = await getStudentInfo(sessionToken)
+        if (studentInfo.name?.trim()) {
+          await prisma.user.update({ where: { id: userId }, data: { name: studentInfo.name.trim() } })
+          console.log('[GRADES ROUTER] Background sync: updated user name:', studentInfo.name.trim())
+        }
+        const profileUpdate: Record<string, unknown> = {}
+        if (studentInfo.counselor?.trim()) profileUpdate.counselorName = studentInfo.counselor.trim()
+        const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
+        if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) profileUpdate.graduationYear = cohortNum
+        if (Object.keys(profileUpdate).length > 0) {
+          await prisma.profile.upsert({ where: { userId }, create: { userId, ...profileUpdate }, update: profileUpdate })
+        }
+      } catch (infoErr) {
+        console.warn('[GRADES ROUTER] Background sync: student info fetch failed (non-fatal):',
+          infoErr instanceof Error ? infoErr.message : String(infoErr))
+      }
+
+      // Sync upcoming assignments from HAC grades
+      const { classes: rawHacGrades } = await hacGrades(entry.token)
+      const normalizedGrades = normalizeHacGrades(rawHacGrades)
+      const upcomingToSync = normalizedGrades.flatMap(course =>
+        (course.upcomingAssignments ?? []).map(a => ({
+          userId,
+          title: a.name,
+          subject: course.name,
+          dueDate: a.dateDue
+            ? (() => { const p = new Date(a.dateDue); return isNaN(p.getTime()) ? new Date(Date.now() + 7 * 86400000) : p })()
+            : new Date(Date.now() + 7 * 86400000),
+        }))
+      )
+      for (const assignment of upcomingToSync) {
+        await prisma.assignment.upsert({
+          where: { userId_title_subject: { userId: assignment.userId, title: assignment.title, subject: assignment.subject } },
+          update: { dueDate: assignment.dueDate },
+          create: { ...assignment, completed: false },
+        }).catch(async () => {
+          const existing = await prisma.assignment.findFirst({
+            where: { userId: assignment.userId, title: assignment.title, subject: assignment.subject },
+          })
+          if (!existing) await prisma.assignment.create({ data: { ...assignment, completed: false } })
+        })
+      }
+      console.log(`[GRADES ROUTER] Background sync: synced ${upcomingToSync.length} assignments for userId:`, userId)
+    }
+
+    await prisma.schoolConnection.update({
+      where: { userId },
+      data: { syncStatus: 'complete', syncError: null, lastSynced: new Date() },
+    }).catch(() => {})
+    console.log('[GRADES ROUTER] Background sync complete for userId:', userId)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[GRADES ROUTER] Background sync failed for userId:', userId, ':', msg)
+    await prisma.schoolConnection.update({
+      where: { userId },
+      data: { syncStatus: 'error', syncError: msg },
+    }).catch(() => {})
+  }
 }
 
 // ── Routes ─────────────────────────────────────────────────────────────────────
@@ -422,7 +517,7 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
-        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
+        ...(encryptedPassword ? { encryptedPassword: encryptedPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
@@ -430,7 +525,7 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         systemType: 'HAC',
         districtUrl: resolvedBaseUrl,
         hacUsername: username,
-        ...(encryptedPassword ? { hacPasswordEncrypted: encryptedPassword } : {}),
+        ...(encryptedPassword ? { encryptedPassword: encryptedPassword } : {}),
       },
     })
 
@@ -452,50 +547,8 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Best-effort: fetch real student info from HAC and sync to User + Profile
-    try {
-      console.log('[GRADES ROUTER] Fetching student info from HAC...')
-      const studentInfo = await getStudentInfo(sessionToken)
-
-      if (studentInfo.name?.trim()) {
-        await prisma.user.update({ where: { id: userId }, data: { name: studentInfo.name.trim() } })
-        console.log('[GRADES ROUTER] Updated user name from HAC:', studentInfo.name.trim())
-      }
-
-      // Save counselor and graduation year into Profile
-      const profileUpdate: Record<string, unknown> = {}
-      if (studentInfo.counselor?.trim()) profileUpdate.counselorName = studentInfo.counselor.trim()
-      const cohortNum = studentInfo.cohortYear ? parseInt(studentInfo.cohortYear.replace(/\D/g, ''), 10) : NaN
-      if (!isNaN(cohortNum) && cohortNum > 2000 && cohortNum < 2060) profileUpdate.graduationYear = cohortNum
-
-      if (Object.keys(profileUpdate).length > 0) {
-        await prisma.profile.upsert({
-          where: { userId },
-          create: { userId, ...profileUpdate },
-          update: profileUpdate,
-        })
-        console.log('[GRADES ROUTER] Synced profile from HAC:', profileUpdate)
-      }
-    } catch (infoErr: unknown) {
-      console.warn('[GRADES ROUTER] Could not fetch student info (non-fatal):',
-        infoErr instanceof Error ? infoErr.message : String(infoErr))
-    }
-
-    // Persist the session cookie to DB so it can survive backend restarts
-    try {
-      const stored = getSessionByToken(sessionToken)
-      if (stored) {
-        await prisma.schoolConnection.update({
-          where: { userId },
-          data: { cachedSession: stored.sessionData },
-        })
-        console.log('[GRADES ROUTER] Session cached to DB for userId:', userId)
-      }
-    } catch (cacheErr) {
-      console.warn('[GRADES ROUTER] Non-fatal: could not cache session:',
-        cacheErr instanceof Error ? cacheErr.message : String(cacheErr))
-    }
-
+    // Respond immediately — all remaining work (session cache, student info, grade sync)
+    // runs in the background so the client is not blocked by HAC scraping.
     res.json({
       data: {
         sessionToken,
@@ -504,6 +557,11 @@ router.post('/hac/login', async (req: AuthRequest, res: Response): Promise<void>
         expiresIn: 1800,
       },
     })
+
+    // Fire-and-forget: persist session + sync grades in background
+    runBackgroundSync(userId, sessionToken).catch(e =>
+      console.error('[GRADES ROUTER] Unhandled background sync error:', e instanceof Error ? e.message : String(e))
+    )
   } catch (err: unknown) {
     sendError(res, 'HAC_LOGIN', err, 'LOGIN_FAILED')
   }
@@ -554,14 +612,14 @@ router.post('/powerschool/login', async (req: AuthRequest, res: Response): Promi
       update: {
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
-        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
+        ...(encryptedPsPassword ? { encryptedPassword: encryptedPsPassword } : {}),
         lastSynced: new Date(),
       },
       create: {
         userId,
         systemType: 'PowerSchool',
         districtUrl: baseUrl,
-        ...(encryptedPsPassword ? { psPasswordEncrypted: encryptedPsPassword } : {}),
+        ...(encryptedPsPassword ? { encryptedPassword: encryptedPsPassword } : {}),
       },
     })
 
@@ -599,86 +657,109 @@ router.get('/current', async (req: AuthRequest, res: Response): Promise<void> =>
   if (!entry) return
 
   try {
-    const data = await runWithAutoRelogin(userId, entry, async activeEntry => {
-      if (activeEntry.session.systemType === 'HAC') {
-        const { classes: rawHacGrades } = await hacGrades(activeEntry.token)
-        const normalizedGrades = normalizeHacGrades(rawHacGrades)
-        // Sync upcoming assignments from HAC into the planner.
-        // Collect all upcoming assignments across all courses.
-        const upcomingToSync = normalizedGrades.flatMap(course =>
-          (course.upcomingAssignments ?? []).map(a => ({
-            userId,
-            title: a.name,
-            subject: course.name,
-            dueDate: a.dateDue
-              ? (() => {
-                  const parsed = new Date(a.dateDue)
-                  return isNaN(parsed.getTime()) ? new Date(Date.now() + 7 * 86400000) : parsed
-                })()
-              : new Date(Date.now() + 7 * 86400000),
-          }))
-        )
+    // Extend session on successful access
+    touchSession(userId)
 
-        // Upsert upcoming assignments — avoid duplicates by userId + title + subject
-        if (upcomingToSync.length > 0) {
-          for (const assignment of upcomingToSync) {
+    if (entry.session.systemType === 'HAC') {
+      const { classes: rawHacGrades } = await hacGrades(entry.token)
+      const normalizedGrades = normalizeHacGrades(rawHacGrades)
+
+      // Sync upcoming assignments from HAC into the planner.
+      // Collect all upcoming assignments across all courses.
+      const upcomingToSync = normalizedGrades.flatMap(course =>
+        (course.upcomingAssignments ?? []).map(a => ({
+          userId,
+          title: a.name,
+          subject: course.name,
+          dueDate: a.dateDue
+            ? (() => {
+                const parsed = new Date(a.dateDue)
+                return isNaN(parsed.getTime()) ? new Date(Date.now() + 7 * 86400000) : parsed
+              })()
+            : new Date(Date.now() + 7 * 86400000), // default 1 week out if no date
+        }))
+      )
+
+      // Upsert upcoming assignments — avoid duplicates by userId + title + subject
+      if (upcomingToSync.length > 0) {
+        for (const assignment of upcomingToSync) {
+          await prisma.assignment.upsert({
+            where: {
+              userId_title_subject: {
+                userId: assignment.userId,
+                title: assignment.title,
+                subject: assignment.subject,
+              },
+            },
+            update: {
+              dueDate: assignment.dueDate,
+            },
+            create: {
+              ...assignment,
+              completed: false,
+            },
+          }).catch(async () => {
+            // Fallback if unique constraint doesn't exist: findFirst + create
             const existing = await prisma.assignment.findFirst({
               where: { userId: assignment.userId, title: assignment.title, subject: assignment.subject },
             })
-            if (existing) {
-              await prisma.assignment.update({
-                where: { id: existing.id },
-                data: { dueDate: assignment.dueDate },
-              })
-            } else {
+            if (!existing) {
               await prisma.assignment.create({ data: { ...assignment, completed: false } })
             }
-          }
-          console.log(`[GRADES ROUTER] Synced ${upcomingToSync.length} upcoming assignments from HAC`)
+          })
         }
+        console.log(`[GRADES ROUTER] Synced ${upcomingToSync.length} upcoming assignments from HAC`)
+      }
 
-        return {
-          systemType: activeEntry.session.systemType,
+      res.json({
+        data: {
+          systemType: entry.session.systemType,
           grades: normalizedGrades,
           upcomingAssignmentsSynced: upcomingToSync.length,
-        }
-      }
+        },
+      })
+    } else {
+      const rawPsGrades = await psGrades(entry.token)
+      const normalizedGrades = normalizePsGrades(rawPsGrades)
 
-      const rawPsGrades = await psGrades(activeEntry.token)
-      return {
-        systemType: activeEntry.session.systemType,
-        grades: normalizePsGrades(rawPsGrades),
-      }
-    })
-
-    res.json({ data })
+      res.json({
+        data: {
+          systemType: entry.session.systemType,
+          grades: normalizedGrades,
+        },
+      })
+    }
   } catch (err: unknown) {
     sendError(res, 'FETCH_CURRENT_GRADES', err, 'FETCH_ERROR')
   }
 })
 
 router.get('/transcript', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   try {
-    const data = await runWithAutoRelogin(userId, entry, async activeEntry => ({
-      systemType: activeEntry.session.systemType,
-      transcript: activeEntry.session.systemType === 'HAC'
-        ? await hacTranscript(activeEntry.token)
-        : await psTranscript(activeEntry.token),
-    }))
+    let transcript: object
 
-    res.json({ data })
+    if (entry.session.systemType === 'HAC') {
+      transcript = await hacTranscript(entry.token)
+    } else {
+      transcript = await psTranscript(entry.token)
+    }
+
+    res.json({
+      data: {
+        systemType: entry.session.systemType,
+        transcript,
+      },
+    })
   } catch (err: unknown) {
     sendError(res, 'FETCH_TRANSCRIPT', err, 'FETCH_ERROR')
   }
 })
 
 router.get('/schedule', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -694,7 +775,7 @@ router.get('/schedule', async (req: AuthRequest, res: Response): Promise<void> =
   }
 
   try {
-    const schedule = await runWithAutoRelogin(userId, entry, activeEntry => getSchedule(activeEntry.token))
+    const schedule = await getSchedule(entry.token)
 
     res.json({
       data: {
@@ -707,54 +788,50 @@ router.get('/schedule', async (req: AuthRequest, res: Response): Promise<void> =
 })
 
 router.get('/gpa', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   try {
-    const data = await runWithAutoRelogin(userId, entry, async activeEntry => {
-      let unweightedGpa: number | null = null
-      let weightedGpa: number | null = null
-      let courseCount = 0
+    let unweightedGpa: number | null = null
+    let weightedGpa: number | null = null
+    let courseCount = 0
 
-      if (activeEntry.session.systemType === 'HAC') {
-        // Pull the real cumulative GPAs that HAC calculates and displays on the transcript page
-        const transcript = await hacTranscript(activeEntry.token)
-        const t = transcript as { weightedGPA?: string | null; unweightedGPA?: string | null; semesters?: Array<{ courses: unknown[] }> }
+    if (entry.session.systemType === 'HAC') {
+      // Pull the real cumulative GPAs that HAC calculates and displays on the transcript page
+      const transcript = await hacTranscript(entry.token)
+      const t = transcript as { weightedGPA?: string | null; unweightedGPA?: string | null; semesters?: Array<{ courses: unknown[] }> }
 
-        const w = parseFloat(t.weightedGPA ?? '')
-        const u = parseFloat(t.unweightedGPA ?? '')
-        if (!isNaN(w)) weightedGpa   = Math.round(w * 1000) / 1000
-        if (!isNaN(u)) unweightedGpa = Math.round(u * 1000) / 1000
+      const w = parseFloat(t.weightedGPA ?? '')
+      const u = parseFloat(t.unweightedGPA ?? '')
+      if (!isNaN(w)) weightedGpa   = Math.round(w * 100) / 100
+      if (!isNaN(u)) unweightedGpa = Math.round(u * 100) / 100
 
-        courseCount = (t.semesters ?? []).reduce((acc, s) => acc + (s.courses?.length ?? 0), 0)
-      } else {
-        const ps = await psGrades(activeEntry.token)
-        courseCount = ps.length
-        const rawGrades = ps.map(c => ({ average: c.grade }))
-        const gpa = computeGPA(rawGrades)
-        unweightedGpa = gpa
-        weightedGpa   = gpa
-      }
+      courseCount = (t.semesters ?? []).reduce((acc, s) => acc + (s.courses?.length ?? 0), 0)
+    } else {
+      const ps = await psGrades(entry.token)
+      courseCount = ps.length
+      const rawGrades = ps.map(c => ({ average: c.grade }))
+      const gpa = computeGPA(rawGrades)
+      unweightedGpa = gpa
+      weightedGpa   = gpa
+    }
 
-      return {
+    res.json({
+      data: {
         gpa: unweightedGpa,
         unweightedGpa,
         weightedGpa,
         courseCount,
-        systemType: activeEntry.session.systemType,
-      }
+        systemType: entry.session.systemType,
+      },
     })
-
-    res.json({ data })
   } catch (err: unknown) {
     sendError(res, 'FETCH_GPA', err, 'FETCH_ERROR')
   }
 })
 
 router.get('/info', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -770,7 +847,7 @@ router.get('/info', async (req: AuthRequest, res: Response): Promise<void> => {
   }
 
   try {
-    const info = await runWithAutoRelogin(userId, entry, activeEntry => getStudentInfo(activeEntry.token))
+    const info = await getStudentInfo(entry.token)
 
     res.json({
       data: info,
@@ -805,33 +882,23 @@ router.delete('/session', async (req: AuthRequest, res: Response): Promise<void>
 router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.userId!
 
-  // Try to resolve session silently — don't send 401 on failure,
-  // just report the connection status. This endpoint is called on
-  // app load to trigger auto-relogin in the background.
   let entry = getSessionByUserId(userId)
-  if (entry && Date.now() - entry.session.createdAt > HAC_REFRESH_AFTER_MS) {
-    console.log('[GRADES ROUTER] Existing school session is old; refreshing on status check for userId:', userId)
-    deleteSessionByUserId(userId)
-    const reloginResult = await autoRelogin(userId)
-    entry = reloginResult?.session ?? null
-  }
 
+  // If no in-memory session, try to restore from DB cache
   if (!entry) {
-    // Try auto-relogin (silently, no response on failure)
-    const reloginResult = await autoRelogin(userId)
-    if (reloginResult?.session) {
-      entry = reloginResult.session
-    } else {
-      // Last resort: try DB cache
-      const cachedConnection = await prisma.schoolConnection.findUnique({ where: { userId } }).catch(() => null)
-      if (cachedConnection?.cachedSession) {
-        const restoredToken = restoreSessionFromCache(
-          userId,
-          cachedConnection.systemType as SchoolSystemType,
-          toOrigin(cachedConnection.districtUrl),
-          cachedConnection.cachedSession,
-        )
-        if (restoredToken) entry = getSessionByUserId(userId)
+    const cachedConnection = await prisma.schoolConnection.findUnique({ where: { userId } })
+
+    if (cachedConnection?.cachedSession) {
+      console.log('[GRADES ROUTER] Attempting session restore from DB cache for userId:', userId)
+      const restoredToken = restoreSessionFromCache(
+        userId,
+        cachedConnection.systemType as SchoolSystemType,
+        toOrigin(cachedConnection.districtUrl),
+        cachedConnection.cachedSession
+      )
+      if (restoredToken) {
+        entry = getSessionByUserId(userId)
+        console.log('[GRADES ROUTER] Session restored from cache:', Boolean(entry))
       }
     }
   }
@@ -859,9 +926,29 @@ router.get('/status', async (req: AuthRequest, res: Response): Promise<void> => 
   })
 })
 
-router.get('/classwork', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/sync-status', async (req: AuthRequest, res: Response): Promise<void> => {
   const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const connection = await prisma.schoolConnection.findUnique({
+    where: { userId },
+    select: { syncStatus: true, syncError: true, lastSynced: true },
+  }).catch(() => null)
+
+  if (!connection) {
+    res.json({ data: { status: 'idle', lastSyncedAt: null, errorMessage: null } })
+    return
+  }
+
+  res.json({
+    data: {
+      status: connection.syncStatus ?? 'idle',
+      lastSyncedAt: connection.lastSynced ?? null,
+      errorMessage: connection.syncError ?? null,
+    },
+  })
+})
+
+router.get('/classwork', async (req: AuthRequest, res: Response): Promise<void> => {
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -870,12 +957,9 @@ router.get('/classwork', async (req: AuthRequest, res: Response): Promise<void> 
   }
 
   try {
+    touchSession(req.userId!)
     const period = req.query.period as string | undefined
-    const { classes, availablePeriods, currentPeriod } = await runWithAutoRelogin(
-      userId,
-      entry,
-      activeEntry => hacGrades(activeEntry.token, period),
-    )
+    const { classes, availablePeriods, currentPeriod } = await hacGrades(entry.token, period)
     res.json({ data: { classes, availablePeriods, currentPeriod } })
   } catch (err: unknown) {
     sendError(res, 'FETCH_CLASSWORK', err, 'FETCH_ERROR')
@@ -883,8 +967,7 @@ router.get('/classwork', async (req: AuthRequest, res: Response): Promise<void> 
 })
 
 router.get('/report-card', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -893,12 +976,9 @@ router.get('/report-card', async (req: AuthRequest, res: Response): Promise<void
   }
 
   try {
+    touchSession(req.userId!)
     const period = req.query.period as string | undefined
-    const { reportingPeriods, currentPeriod, semesters } = await runWithAutoRelogin(
-      userId,
-      entry,
-      activeEntry => getReportCard(activeEntry.token, period),
-    )
+    const { reportingPeriods, currentPeriod, semesters } = await getReportCard(entry.token, period)
     res.json({ data: { reportingPeriods, currentPeriod, semesters } })
   } catch (err: unknown) {
     sendError(res, 'FETCH_REPORT_CARD', err, 'FETCH_ERROR')
@@ -906,8 +986,7 @@ router.get('/report-card', async (req: AuthRequest, res: Response): Promise<void
 })
 
 router.get('/progress-report', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -916,8 +995,9 @@ router.get('/progress-report', async (req: AuthRequest, res: Response): Promise<
   }
 
   try {
+    touchSession(req.userId!)
     const date = req.query.date as string | undefined
-    const data = await runWithAutoRelogin(userId, entry, activeEntry => getProgressReport(activeEntry.token, date))
+    const data = await getProgressReport(entry.token, date)
     res.json({ data })
   } catch (err: unknown) {
     sendError(res, 'FETCH_PROGRESS_REPORT', err, 'FETCH_ERROR')
@@ -925,8 +1005,7 @@ router.get('/progress-report', async (req: AuthRequest, res: Response): Promise<
 })
 
 router.get('/attendance', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -935,8 +1014,9 @@ router.get('/attendance', async (req: AuthRequest, res: Response): Promise<void>
   }
 
   try {
+    touchSession(req.userId!)
     const offset = parseInt(String(req.query.monthOffset ?? '0')) || 0
-    const data = await runWithAutoRelogin(userId, entry, activeEntry => getAttendance(activeEntry.token, offset))
+    const data = await getAttendance(entry.token, offset)
     res.json({ data })
   } catch (err: unknown) {
     sendError(res, 'FETCH_ATTENDANCE', err, 'FETCH_ERROR')
@@ -944,8 +1024,7 @@ router.get('/attendance', async (req: AuthRequest, res: Response): Promise<void>
 })
 
 router.get('/contact-teachers', async (req: AuthRequest, res: Response): Promise<void> => {
-  const userId = req.userId!
-  const entry = await resolveSession(userId, res)
+  const entry = await resolveSession(req.userId!, res)
   if (!entry) return
 
   if (entry.session.systemType !== 'HAC') {
@@ -954,7 +1033,8 @@ router.get('/contact-teachers', async (req: AuthRequest, res: Response): Promise
   }
 
   try {
-    const data = await runWithAutoRelogin(userId, entry, activeEntry => getContactTeachers(activeEntry.token))
+    touchSession(req.userId!)
+    const data = await getContactTeachers(entry.token)
     res.json({ data })
   } catch (err: unknown) {
     sendError(res, 'FETCH_CONTACT_TEACHERS', err, 'FETCH_ERROR')
@@ -976,9 +1056,10 @@ router.post('/sync-profile', async (req: AuthRequest, res: Response): Promise<vo
   }
 
   try {
+    touchSession(userId)
     console.log('[GRADES ROUTER] Re-syncing profile from HAC for userId:', userId)
 
-    const studentInfo = await runWithAutoRelogin(userId, entry, activeEntry => getStudentInfo(activeEntry.token))
+    const studentInfo = await getStudentInfo(entry.token)
     const profileUpdate: Record<string, unknown> = {}
     const userUpdate: Record<string, unknown> = {}
 
