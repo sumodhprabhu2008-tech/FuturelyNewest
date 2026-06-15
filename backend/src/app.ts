@@ -12,6 +12,7 @@ import aiRouter from './routes/ai'
 import feedRouter from './routes/feed'
 import parentRouter from './routes/parent'
 import notificationsRouter from './routes/notifications'
+import collegesRouter from './routes/colleges'
 import { requireAuth } from './middleware/auth'
 import gradesIntegrationRouter from './integrations/grades/gradesRouter'
 
@@ -127,6 +128,7 @@ if (ENABLE_DEV_INTEGRATION_AUTH_BYPASS) {
   app.use('/api/feed', devBypass, feedRouter)
   app.use('/api/notifications', devBypass, notificationsRouter)
   app.use('/api/integrations/grades', devBypass, gradesIntegrationRouter)
+  app.use('/api/colleges', devBypass, collegesRouter)
 } else {
   app.use('/api/assignments', assignmentsRouter)
   app.use('/api/students', studentsRouter)
@@ -135,6 +137,7 @@ if (ENABLE_DEV_INTEGRATION_AUTH_BYPASS) {
   app.use('/api/feed', requireAuth, feedRouter)
   app.use('/api/notifications', requireAuth, notificationsRouter)
   app.use('/api/integrations/grades', requireAuth, gradesIntegrationRouter)
+  app.use('/api/colleges', requireAuth, collegesRouter)
 }
 
 app.use('/api/parent', parentRouter)

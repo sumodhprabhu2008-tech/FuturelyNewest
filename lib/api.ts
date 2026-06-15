@@ -1,5 +1,13 @@
 const BASE = ''
 
+class ApiError extends Error {
+  code?: string
+  constructor(message: string, code?: string) {
+    super(message)
+    this.code = code
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('ns_token') : null
   const res = await fetch(`${BASE}${path}`, {
@@ -11,9 +19,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     },
   })
   if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: string | { message?: string } }
-    const msg = typeof body?.error === 'string' ? body.error : body?.error?.message
-    throw new Error(msg ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => ({})) as { error?: string | { message?: string; code?: string } }
+    const msg  = typeof body?.error === 'string' ? body.error : body?.error?.message
+    const code = typeof body?.error === 'object' ? body?.error?.code : undefined
+    throw new ApiError(msg ?? `HTTP ${res.status}`, code)
   }
   const { data } = await res.json() as { data: T }
   return data
@@ -419,6 +428,20 @@ export const api = {
       method: 'DELETE',
     }),
 
+  // ── Colleges ──────────────────────────────────────────────────────────────────
+
+  collegeList: () =>
+    request<CollegeListItem[]>('/api/colleges'),
+
+  collegeAdd: (name: string) =>
+    request<CollegeListItem>('/api/colleges', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
+  collegeRemove: (id: number) =>
+    request<{ deleted: boolean }>(`/api/colleges/${id}`, { method: 'DELETE' }),
+
   deleteAccount: (password: string) =>
     request<{ deleted: boolean }>('/api/auth/account', {
       method: 'DELETE',
@@ -569,6 +592,13 @@ export interface NormalizedCourse {
 
 // Kept for backwards compatibility — same shape as NormalizedCourse
 export type HacGrade = NormalizedCourse
+
+export interface CollegeListItem {
+  id: number
+  userId: number
+  name: string
+  createdAt: string
+}
 
 export interface AppNotification {
   id: number

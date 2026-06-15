@@ -33,6 +33,7 @@ model User {
   profile               Profile?
   notificationsReceived Notification[]      @relation("NotifRecipient")
   notificationsSent     Notification[]      @relation("NotifSender")
+  collegeList           CollegeListItem[]
 }
 
 model Profile {
@@ -207,4 +208,15 @@ model StudentProfile {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   User           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CollegeListItem {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  name      String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
 }
