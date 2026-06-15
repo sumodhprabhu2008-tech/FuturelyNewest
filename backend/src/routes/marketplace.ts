@@ -153,7 +153,8 @@ router.post('/open-box', requireAuth, async (req: AuthRequest, res: Response): P
     res.status(400).json({ error: 'boxType must be tag, name-color, or pfp' }); return
   }
 
-  const BOX_COST = 10
+  const BOX_COSTS: Record<string, number> = { tag: 15, 'name-color': 25, pfp: 30 }
+  const BOX_COST = BOX_COSTS[boxType]
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },

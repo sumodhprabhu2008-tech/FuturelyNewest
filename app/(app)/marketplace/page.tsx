@@ -33,9 +33,9 @@ function pfpClass(effect: string | null | undefined): string {
 
 type DropGroup = { rarity: string; pct: string; items: string[] }
 
-const BOX_DEFS: { type: 'tag' | 'name-color' | 'pfp'; icon: string; label: string; desc: string; drops: DropGroup[] }[] = [
+const BOX_DEFS: { type: 'tag' | 'name-color' | 'pfp'; icon: string; label: string; desc: string; cost: number; drops: DropGroup[] }[] = [
   {
-    type: 'tag', icon: '📦', label: 'Tag Box', desc: 'Win exclusive profile tags',
+    type: 'tag', icon: '📦', label: 'Tag Box', desc: 'Win exclusive profile tags', cost: 15,
     drops: [
       { rarity: 'Common',    pct: '60%',   items: ['Grinder', 'Focused', 'Scholar'] },
       { rarity: 'Uncommon',  pct: '25%',   items: ['Honors Student', 'AP Student'] },
@@ -46,7 +46,7 @@ const BOX_DEFS: { type: 'tag' | 'name-color' | 'pfp'; icon: string; label: strin
     ],
   },
   {
-    type: 'name-color', icon: '🎨', label: 'Name Color Box', desc: 'Colorize your display name',
+    type: 'name-color', icon: '🎨', label: 'Name Color Box', desc: 'Colorize your display name', cost: 25,
     drops: [
       { rarity: 'Common',    pct: '60%',    items: ['Forest Green', 'Navy Blue', 'Dark Red', 'Slate Blue', 'Teal'] },
       { rarity: 'Uncommon',  pct: '24.99%', items: ['Bright Orange', 'Violet', 'Cyan'] },
@@ -57,7 +57,7 @@ const BOX_DEFS: { type: 'tag' | 'name-color' | 'pfp'; icon: string; label: strin
     ],
   },
   {
-    type: 'pfp', icon: '🖼️', label: 'Profile Picture Box', desc: 'Apply effects to your avatar',
+    type: 'pfp', icon: '🖼️', label: 'Profile Picture Box', desc: 'Apply effects to your avatar', cost: 30,
     drops: [
       { rarity: 'Common',    pct: '60%',    items: ['Green Border', 'Blue Border', 'Red Border', 'Navy Border', 'Teal Border'] },
       { rarity: 'Uncommon',  pct: '24.99%', items: ['Orange Border', 'Violet Border', 'Cyan Border'] },
@@ -110,7 +110,8 @@ export default function MarketplacePage() {
   }
 
   async function handleOpenBox(boxType: 'tag' | 'name-color' | 'pfp') {
-    if (opening || !inv || inv.coins < 10) return
+    const cost = BOX_DEFS.find(b => b.type === boxType)!.cost
+    if (opening || !inv || inv.coins < cost) return
     setOpening(boxType); setResult(null)
     try {
       const r = await api.marketplaceOpenBox(boxType)
@@ -190,11 +191,11 @@ export default function MarketplacePage() {
         <div>
           <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 6 }}>Your Balance</p>
           <div style={{ fontSize: 32, fontWeight: 800, color: '#EAB308', letterSpacing: '-0.5px' }}>🪙 {inv?.coins?.toLocaleString() ?? 0}</div>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>+50 coins every day you log in</p>
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>+30 coins every day you log in</p>
         </div>
         {inv?.canClaimToday ? (
           <button onClick={handleDailyClaim} style={{ padding: '12px 20px', borderRadius: 10, border: 'none', background: '#EAB308', color: '#000', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}>
-            Claim 50 🪙
+            Claim Daily 🪙
           </button>
         ) : (
           <div style={{ textAlign: 'right' as const }}>
@@ -235,7 +236,7 @@ export default function MarketplacePage() {
       )}
 
       {/* Boxes */}
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 12 }}>Open a Box — 10 🪙 each</p>
+      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 12 }}>Open a Box — spend coins to unlock rewards</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 28 }}>
         {BOX_DEFS.map(box => {
           const isHovered = hoveredBox === box.type
@@ -252,17 +253,17 @@ export default function MarketplacePage() {
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{box.desc}</div>
               <button
                 onClick={() => void handleOpenBox(box.type)}
-                disabled={!inv || inv.coins < 10 || !!opening}
+                disabled={!inv || inv.coins < box.cost || !!opening}
                 style={{
                   width: '100%', padding: '10px 0', borderRadius: 9, border: 'none',
                   background: opening === box.type ? 'var(--surface-2)' : 'var(--primary)',
                   color: opening === box.type ? 'var(--text-muted)' : '#060D10',
                   fontWeight: 700, fontSize: 13, marginTop: 4,
-                  cursor: inv && inv.coins >= 10 && !opening ? 'pointer' : 'not-allowed',
-                  opacity: !inv || inv.coins < 10 ? 0.45 : 1,
+                  cursor: inv && inv.coins >= box.cost && !opening ? 'pointer' : 'not-allowed',
+                  opacity: !inv || inv.coins < box.cost ? 0.45 : 1,
                 }}
               >
-                {opening === box.type ? 'Opening…' : '🎁 Open Box'}
+                {opening === box.type ? 'Opening…' : `🎁 Open — 🪙 ${box.cost}`}
               </button>
 
               {/* Drop table — shown on hover */}
