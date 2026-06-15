@@ -12,16 +12,17 @@ const PFP_BORDER_MAP: Record<string, string> = {
   'border-green': '#22C55E', 'border-blue': '#3B82F6', 'border-red': '#EF4444',
   'border-navy': '#1D4ED8', 'border-teal': '#14B8A6', 'border-orange': '#F97316',
   'border-violet': '#7C3AED', 'border-cyan': '#06B6D4', 'border-hotpink': '#EC4899',
-  'border-gold': '#D97706', 'border-lime': '#84CC16', 'frame-black': '#111111',
+  'border-gold': '#D97706', 'border-lime': '#84CC16',
 }
 const PFP_GLOW_MAP: Record<string, [string, string]> = {
   'glow-pink':   ['#EC4899', '#EC489955'],
   'glow-purple': ['#8B5CF6', '#8B5CF655'],
-  'glow-gold':   ['#D97706', '#D9770655'],
 }
 function pfpStyle(effect: string | null | undefined): React.CSSProperties {
   if (!effect) return {}
   if (effect === 'rainbow') return { background: '#ff0000', border: '3px solid #ff0000', boxShadow: '0 0 14px #ff000088', color: '#fff' }
+  if (effect === 'glow-gold')   return { background: 'linear-gradient(135deg, #D97706, #F59E0B)', color: '#000', border: '2px solid #D97706' }
+  if (effect === 'frame-black') return { background: '#0d0d0d', color: '#4B5563', border: '2px solid #1F2937' }
   if (PFP_BORDER_MAP[effect]) return { border: `2px solid ${PFP_BORDER_MAP[effect]}` }
   if (PFP_GLOW_MAP[effect]) return { border: `2px solid ${PFP_GLOW_MAP[effect][0]}`, boxShadow: `0 0 12px ${PFP_GLOW_MAP[effect][1]}` }
   return {}
@@ -40,29 +41,29 @@ const BOX_DEFS: { type: 'tag' | 'name-color' | 'pfp'; icon: string; label: strin
       { rarity: 'Uncommon',  pct: '25%',   items: ['Honors Student', 'AP Student'] },
       { rarity: 'Rare',      pct: '10%',   items: ["Dean's List", 'Top Performer'] },
       { rarity: 'Epic',      pct: '4%',    items: ['Ace', 'Prodigy'] },
-      { rarity: 'Legendary', pct: '0.5%',  items: ['Mastermind', 'GOAT'] },
-      { rarity: 'Mythic',    pct: '0.5%',  items: ['Genius'] },
+      { rarity: 'Legendary', pct: '1%',    items: ['Mastermind', 'Genius'] },
+      { rarity: 'Mythic',    pct: '0.5%',  items: ['GOAT'] },
     ],
   },
   {
     type: 'name-color', icon: '🎨', label: 'Name Color Box', desc: 'Colorize your display name',
     drops: [
-      { rarity: 'Common',    pct: '50%',    items: ['Forest Green', 'Navy Blue', 'Dark Red', 'Slate Blue', 'Teal'] },
-      { rarity: 'Uncommon',  pct: '23%',    items: ['Bright Orange', 'Violet', 'Cyan'] },
-      { rarity: 'Rare',      pct: '17%',    items: ['Hot Pink', 'Gold', 'Lime Green'] },
-      { rarity: 'Epic',      pct: '7%',     items: ['Electric Blue', 'Magenta'] },
-      { rarity: 'Legendary', pct: '2.99%',  items: ['Pure White', 'Black'] },
+      { rarity: 'Common',    pct: '60%',    items: ['Forest Green', 'Navy Blue', 'Dark Red', 'Slate Blue', 'Teal'] },
+      { rarity: 'Uncommon',  pct: '24.99%', items: ['Bright Orange', 'Violet', 'Cyan'] },
+      { rarity: 'Rare',      pct: '10%',    items: ['Hot Pink', 'Gold', 'Lime Green'] },
+      { rarity: 'Epic',      pct: '4%',     items: ['Electric Blue', 'Magenta'] },
+      { rarity: 'Legendary', pct: '1%',     items: ['Pure White', 'Black'] },
       { rarity: 'Mythic',    pct: '0.01%',  items: ['Rainbow RGB ✨'] },
     ],
   },
   {
     type: 'pfp', icon: '🖼️', label: 'Profile Picture Box', desc: 'Apply effects to your avatar',
     drops: [
-      { rarity: 'Common',    pct: '50%',    items: ['Green Border', 'Blue Border', 'Red Border', 'Navy Border', 'Teal Border'] },
-      { rarity: 'Uncommon',  pct: '23%',    items: ['Orange Border', 'Violet Border', 'Cyan Border'] },
-      { rarity: 'Rare',      pct: '17%',    items: ['Hot Pink Border', 'Gold Border', 'Lime Border'] },
-      { rarity: 'Epic',      pct: '7%',     items: ['Pink Glow', 'Purple Glow'] },
-      { rarity: 'Legendary', pct: '2.99%',  items: ['Gold Glow', 'Black Frame'] },
+      { rarity: 'Common',    pct: '60%',    items: ['Green Border', 'Blue Border', 'Red Border', 'Navy Border', 'Teal Border'] },
+      { rarity: 'Uncommon',  pct: '24.99%', items: ['Orange Border', 'Violet Border', 'Cyan Border'] },
+      { rarity: 'Rare',      pct: '10%',    items: ['Hot Pink Border', 'Gold Border', 'Lime Border'] },
+      { rarity: 'Epic',      pct: '4%',     items: ['Pink Glow', 'Purple Glow'] },
+      { rarity: 'Legendary', pct: '1%',     items: ['Gold Fill', 'Void Fill'] },
       { rarity: 'Mythic',    pct: '0.01%',  items: ['Rainbow Animated ✨'] },
     ],
   },
