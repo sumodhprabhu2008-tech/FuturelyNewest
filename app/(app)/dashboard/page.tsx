@@ -7,13 +7,16 @@ import AiBar from '../../../components/ui/AiBar'
 import PageLoader from '../../../components/ui/PageLoader'
 
 const STREAK_MILESTONES = [
-  { days: 3,   tag: 'Consistent', tagColor: '#22C55E', emoji: '✅' },
-  { days: 7,   tag: 'Pro',        tagColor: '#3B82F6', emoji: '⚡' },
-  { days: 14,  tag: 'Dedicated',  tagColor: '#8B5CF6', emoji: '🎯' },
-  { days: 30,  tag: 'Veteran',    tagColor: '#F97316', emoji: '🏅' },
-  { days: 50,  tag: 'Legend',     tagColor: '#EC4899', emoji: '💎' },
-  { days: 100, tag: 'GOD',        tagColor: '#EAB308', emoji: '👑' },
+  { days: 7,   tag: 'Novice',  tagColor: '#22C55E', emoji: '✅' },
+  { days: 14,  tag: 'Pro',     tagColor: '#3B82F6', emoji: '⚡' },
+  { days: 30,  tag: 'Veteran', tagColor: '#F97316', emoji: '🏅' },
+  { days: 50,  tag: 'Legend',  tagColor: '#EC4899', emoji: '💎' },
+  { days: 100, tag: 'GOD',     tagColor: '#EAB308', emoji: '👑' },
 ]
+
+function streakCoinBonus(streak: number) {
+  return 50 + Math.max(0, streak - 1) * 10
+}
 
 function getNextMilestone(streak: number) {
   return STREAK_MILESTONES.find(m => m.days > streak) ?? null
@@ -92,7 +95,7 @@ export default function DashboardPage() {
         .then(r => { if (r.newTags?.length) setNewlyAwardedTags(r.newTags) })
         .catch(() => {})
     }
-    api.marketplaceDailyClaim()
+    api.marketplaceDailyClaim(currentStreak)
       .then(r => setCoins(r.coins))
       .catch(() => {})
     api.me().then(setData).catch(e => setError(e instanceof Error ? e.message : 'Failed'))
@@ -250,6 +253,7 @@ export default function DashboardPage() {
         <div className="ns-card" style={{ ...S.statCard, cursor: 'pointer' }} onClick={() => setShowStreakPopup(true)}>
           <div style={S.statNum}>{dayStreak}</div>
           <div style={S.statLabel}>Day Streak 🔥</div>
+          <div style={{ ...S.statSub, color: '#EAB308' }}>🪙 +{streakCoinBonus(dayStreak)} today</div>
           {(() => {
             const next = getNextMilestone(dayStreak)
             if (!next) return <div style={S.statSub} title="All streak rewards earned">👑 GOD</div>
@@ -284,8 +288,11 @@ export default function DashboardPage() {
             <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>
               {dayStreak} Day Streak!
             </h3>
+            <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#EAB308', fontWeight: 600, textAlign: 'center' as const }}>
+              🪙 +{streakCoinBonus(dayStreak)} coins today · +10 more each extra day
+            </div>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
-              Log in every day to earn exclusive tags. Keep your streak alive to climb the ladder!
+              Start at +50 coins on day 1, and earn +10 more for every consecutive day. Log in every day to unlock exclusive tags too!
             </p>
 
             {newlyAwardedTags.length > 0 && (
@@ -294,7 +301,7 @@ export default function DashboardPage() {
               </div>
             )}
 
-            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 10 }}>Streak Rewards</p>
+            <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-muted)', marginBottom: 10 }}>Tag Rewards</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
               {STREAK_MILESTONES.map(m => {
                 const earned = dayStreak >= m.days
@@ -311,7 +318,7 @@ export default function DashboardPage() {
                       <span style={{ fontSize: 13, fontWeight: 700, color: earned ? m.tagColor : 'var(--text-secondary)' }}>
                         {m.tag}
                       </span>
-                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{m.days} day streak</span>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>{m.days}d · 🪙 +{streakCoinBonus(m.days)}/day</span>
                     </div>
                     {earned && (
                       <span style={{ fontSize: 11, fontWeight: 700, color: m.tagColor, background: m.tagColor + '22', borderRadius: 6, padding: '2px 7px' }}>Earned</span>

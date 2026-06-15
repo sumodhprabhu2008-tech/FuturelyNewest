@@ -6,12 +6,11 @@ import { ASSIGNMENT_SOURCE } from '../constants/assignmentSource'
 const router = Router()
 
 const STREAK_MILESTONES: Array<{ days: number; tag: string; tagColor: string }> = [
-  { days: 3,   tag: 'Consistent', tagColor: '#22C55E' },
-  { days: 7,   tag: 'Pro',        tagColor: '#3B82F6' },
-  { days: 14,  tag: 'Dedicated',  tagColor: '#8B5CF6' },
-  { days: 30,  tag: 'Veteran',    tagColor: '#F97316' },
-  { days: 50,  tag: 'Legend',     tagColor: '#EC4899' },
-  { days: 100, tag: 'GOD',        tagColor: '#EAB308' },
+  { days: 7,   tag: 'Novice',   tagColor: '#22C55E' },
+  { days: 14,  tag: 'Pro',      tagColor: '#3B82F6' },
+  { days: 30,  tag: 'Veteran',  tagColor: '#F97316' },
+  { days: 50,  tag: 'Legend',   tagColor: '#EC4899' },
+  { days: 100, tag: 'GOD',      tagColor: '#EAB308' },
 ]
 
 function parseAllTags(raw: unknown): Array<{ tag: string; tagColor: string }> {

@@ -622,16 +622,16 @@ function PostCard({ post, onLike, onDelete, onOpenComments, onOpenProfile, onFol
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
             <span className={nameColorClass(post.user.nameColor)} style={{ ...P.authorName, ...nameColorStyle(post.user.nameColor) }} onClick={() => onOpenProfile(post.user.id)}>{displayName(post.user)}</span>
+            {post.user.tag && (
+              <span className={isDevTag ? 'tag-rainbow' : ''} style={isDevTag ? P.tagDev : { ...P.tag, color: tagColor, border: `1px solid ${tagColor}`, background: tagColor === 'grey' ? 'rgba(128,128,128,0.1)' : `${tagColor}22` }}>
+                {post.user.tag}
+              </span>
+            )}
             {post.userId !== currentUserId && (
               <button
                 style={{ ...P.followBtn, ...(isFollowing ? { background: 'var(--primary)', color: '#060D10', border: '1px solid var(--primary)' } : {}) }}
                 onClick={e => { e.stopPropagation(); onFollow(post.userId) }}
               >{isFollowing ? 'Following' : 'Follow'}</button>
-            )}
-            {post.user.tag && (
-              <span className={isDevTag ? 'tag-rainbow' : ''} style={isDevTag ? P.tagDev : { ...P.tag, color: tagColor, border: `1px solid ${tagColor}`, background: tagColor === 'grey' ? 'rgba(128,128,128,0.1)' : `${tagColor}22` }}>
-                {post.user.tag}
-              </span>
             )}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{timeAgo(post.createdAt)}</div>

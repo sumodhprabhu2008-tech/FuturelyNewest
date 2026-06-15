@@ -89,6 +89,10 @@ function parseTagArr(raw: unknown): Array<{ tag: string; tagColor: string }> {
 router.post('/daily-coins', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
   if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
   try {
+    const { streak } = req.body as { streak?: number }
+    const streakDay = typeof streak === 'number' && streak >= 1 ? streak : 1
+    const coinBonus = 50 + (streakDay - 1) * 10
+
     const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { coins: true, lastCoinClaim: true } })
     if (!user) { res.status(404).json({ error: 'User not found' }); return }
 
@@ -96,16 +100,16 @@ router.post('/daily-coins', requireAuth, async (req: AuthRequest, res: Response)
     const lastClaimDate = user.lastCoinClaim ? user.lastCoinClaim.toISOString().slice(0, 10) : null
 
     if (lastClaimDate === todayUTC) {
-      res.json({ data: { coins: user.coins, claimed: false, alreadyClaimed: true } })
+      res.json({ data: { coins: user.coins, claimed: false, alreadyClaimed: true, coinBonus } })
       return
     }
 
     const updated = await prisma.user.update({
       where: { id: req.userId },
-      data: { coins: { increment: 50 }, lastCoinClaim: new Date() },
+      data: { coins: { increment: coinBonus }, lastCoinClaim: new Date() },
       select: { coins: true },
     })
-    res.json({ data: { coins: updated.coins, claimed: true, alreadyClaimed: false } })
+    res.json({ data: { coins: updated.coins, claimed: true, alreadyClaimed: false, coinBonus } })
   } catch {
     res.status(500).json({ error: 'Failed to claim daily coins' })
   }

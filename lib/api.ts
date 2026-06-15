@@ -463,8 +463,11 @@ export const api = {
 
   // ── Marketplace ───────────────────────────────────────────────────────────────
 
-  marketplaceDailyClaim: () =>
-    request<{ coins: number; claimed: boolean; alreadyClaimed: boolean }>('/api/marketplace/daily-coins', { method: 'POST' }),
+  marketplaceDailyClaim: (streak?: number) =>
+    request<{ coins: number; claimed: boolean; alreadyClaimed: boolean; coinBonus: number }>('/api/marketplace/daily-coins', {
+      method: 'POST',
+      body: JSON.stringify({ streak: streak ?? 1 }),
+    }),
 
   marketplaceInventory: () =>
     request<InventoryData>('/api/marketplace/inventory'),
