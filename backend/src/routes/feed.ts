@@ -25,7 +25,7 @@ type RawUser = {
   tag: string | null; tagColor: string | null;
   nameColor: string | null; pfpEffect: string | null;
   chatBanned: boolean; chatMutedUntil: Date | null;
-  deletedAt: Date | null; role: string; allTags: string | null;
+  deletedAt: Date | null; role: string; allTags: unknown;
 };
 
 function toFeedUser(u: RawUser) {
