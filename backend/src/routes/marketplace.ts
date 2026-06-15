@@ -63,6 +63,23 @@ const PFP_EFFECT_BOX_ITEMS: ColorItem[] = [
 ]
 
 export const RARITY_ORDER = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic']
+const RARITY_RANK: Record<string, number> = {
+  Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 4, Mythic: 5,
+}
+
+// ── Trade item type ────────────────────────────────────────────────────────────
+
+interface TradeItem {
+  type: 'tag' | 'name-color' | 'pfp'
+  id: string
+  tag?: string
+  tagColor?: string
+  name?: string
+  value?: string
+  rarity: string
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function weightedRandom<T extends { weight: number }>(items: T[]): T {
   const total = items.reduce((s, i) => s + i.weight, 0)
@@ -82,6 +99,130 @@ function parseJsonArr(raw: unknown): Array<{ id: string; [k: string]: unknown }>
 function parseTagArr(raw: unknown): Array<{ tag: string; tagColor: string }> {
   if (Array.isArray(raw)) return raw as Array<{ tag: string; tagColor: string }>
   try { return JSON.parse(String(raw ?? '[]')) } catch { return [] }
+}
+
+function parseTradeItems(raw: unknown): TradeItem[] {
+  if (Array.isArray(raw)) return raw as TradeItem[]
+  try { return JSON.parse(String(raw ?? '[]')) } catch { return [] }
+}
+
+type UserSnap = {
+  allTags: unknown
+  ownedNameColors: unknown
+  ownedPfpEffects: unknown
+  tag?: string
+  nameColor?: string | null
+  pfpEffect?: string | null
+}
+
+function userOwnsItem(user: UserSnap, item: TradeItem): boolean {
+  if (item.type === 'tag') {
+    const tagDef = TAG_BOX_ITEMS.find(t => t.id === item.id)
+    if (!tagDef) return false
+    return parseTagArr(user.allTags).some(t => t.tag === tagDef.tag)
+  }
+  if (item.type === 'name-color') return parseJsonArr(user.ownedNameColors).some(i => i.id === item.id)
+  if (item.type === 'pfp') return parseJsonArr(user.ownedPfpEffects).some(i => i.id === item.id)
+  return false
+}
+
+function removeItem(user: UserSnap, item: TradeItem): Record<string, string | null> {
+  const updates: Record<string, string | null> = {}
+  if (item.type === 'tag') {
+    const tagDef = TAG_BOX_ITEMS.find(t => t.id === item.id)!
+    const tags = parseTagArr(user.allTags).filter(t => t.tag !== tagDef.tag)
+    updates.allTags = JSON.stringify(tags)
+    if (user.tag === tagDef.tag) { updates.tag = 'Student'; updates.tagColor = null }
+  } else if (item.type === 'name-color') {
+    const owned = parseJsonArr(user.ownedNameColors).filter(i => i.id !== item.id)
+    updates.ownedNameColors = JSON.stringify(owned)
+    const def = NAME_COLOR_BOX_ITEMS.find(c => c.id === item.id)
+    if (def && user.nameColor === def.value) updates.nameColor = null
+  } else if (item.type === 'pfp') {
+    const owned = parseJsonArr(user.ownedPfpEffects).filter(i => i.id !== item.id)
+    updates.ownedPfpEffects = JSON.stringify(owned)
+    const def = PFP_EFFECT_BOX_ITEMS.find(c => c.id === item.id)
+    if (def && user.pfpEffect === def.value) updates.pfpEffect = null
+  }
+  return updates
+}
+
+function addItem(user: UserSnap, item: TradeItem): Record<string, string> {
+  const updates: Record<string, string> = {}
+  if (item.type === 'tag') {
+    const tagDef = TAG_BOX_ITEMS.find(t => t.id === item.id)!
+    const tags = parseTagArr(user.allTags)
+    if (!tags.some(t => t.tag === tagDef.tag)) tags.push({ tag: tagDef.tag, tagColor: tagDef.tagColor })
+    updates.allTags = JSON.stringify(tags)
+  } else if (item.type === 'name-color') {
+    const owned = parseJsonArr(user.ownedNameColors)
+    if (!owned.some(i => i.id === item.id)) {
+      owned.push({ id: item.id, name: item.name, value: item.value, rarity: item.rarity })
+    }
+    updates.ownedNameColors = JSON.stringify(owned)
+  } else if (item.type === 'pfp') {
+    const owned = parseJsonArr(user.ownedPfpEffects)
+    if (!owned.some(i => i.id === item.id)) {
+      owned.push({ id: item.id, name: item.name, value: item.value, rarity: item.rarity })
+    }
+    updates.ownedPfpEffects = JSON.stringify(owned)
+  }
+  return updates
+}
+
+function applyMultipleRemoves(user: UserSnap, items: TradeItem[]): Record<string, string | null> {
+  let tags = parseTagArr(user.allTags)
+  let nameColors = parseJsonArr(user.ownedNameColors)
+  let pfpEffects = parseJsonArr(user.ownedPfpEffects)
+  const updates: Record<string, string | null> = {}
+
+  for (const item of items) {
+    if (item.type === 'tag') {
+      const def = TAG_BOX_ITEMS.find(t => t.id === item.id)!
+      tags = tags.filter(t => t.tag !== def.tag)
+      if (user.tag === def.tag) { updates.tag = 'Student'; updates.tagColor = null }
+    } else if (item.type === 'name-color') {
+      nameColors = nameColors.filter(i => i.id !== item.id)
+      const def = NAME_COLOR_BOX_ITEMS.find(c => c.id === item.id)
+      if (def && user.nameColor === def.value) updates.nameColor = null
+    } else if (item.type === 'pfp') {
+      pfpEffects = pfpEffects.filter(i => i.id !== item.id)
+      const def = PFP_EFFECT_BOX_ITEMS.find(c => c.id === item.id)
+      if (def && user.pfpEffect === def.value) updates.pfpEffect = null
+    }
+  }
+
+  updates.allTags = JSON.stringify(tags)
+  updates.ownedNameColors = JSON.stringify(nameColors)
+  updates.ownedPfpEffects = JSON.stringify(pfpEffects)
+  return updates
+}
+
+function applyMultipleAdds(user: UserSnap, items: TradeItem[]): Record<string, string> {
+  let tags = parseTagArr(user.allTags)
+  let nameColors = parseJsonArr(user.ownedNameColors)
+  let pfpEffects = parseJsonArr(user.ownedPfpEffects)
+
+  for (const item of items) {
+    if (item.type === 'tag') {
+      const def = TAG_BOX_ITEMS.find(t => t.id === item.id)!
+      if (!tags.some(t => t.tag === def.tag)) tags.push({ tag: def.tag, tagColor: def.tagColor })
+    } else if (item.type === 'name-color') {
+      if (!nameColors.some(i => i.id === item.id)) {
+        nameColors.push({ id: item.id, name: item.name, value: item.value, rarity: item.rarity })
+      }
+    } else if (item.type === 'pfp') {
+      if (!pfpEffects.some(i => i.id === item.id)) {
+        pfpEffects.push({ id: item.id, name: item.name, value: item.value, rarity: item.rarity })
+      }
+    }
+  }
+
+  return {
+    allTags: JSON.stringify(tags),
+    ownedNameColors: JSON.stringify(nameColors),
+    ownedPfpEffects: JSON.stringify(pfpEffects),
+  }
 }
 
 // ── Daily Coins ───────────────────────────────────────────────────────────────
@@ -122,12 +263,18 @@ router.get('/inventory', requireAuth, async (req: AuthRequest, res: Response): P
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { coins: true, nameColor: true, pfpEffect: true, ownedNameColors: true, ownedPfpEffects: true, lastCoinClaim: true },
+      select: { coins: true, nameColor: true, pfpEffect: true, ownedNameColors: true, ownedPfpEffects: true, lastCoinClaim: true, allTags: true },
     })
     if (!user) { res.status(404).json({ error: 'User not found' }); return }
 
     const todayUTC = new Date().toISOString().slice(0, 10)
     const canClaimToday = !user.lastCoinClaim || user.lastCoinClaim.toISOString().slice(0, 10) !== todayUTC
+
+    const rawTags = parseTagArr(user.allTags)
+    const ownedTags = rawTags.map(t => {
+      const def = TAG_BOX_ITEMS.find(d => d.tag === t.tag)
+      return { id: def?.id ?? t.tag, tag: t.tag, tagColor: t.tagColor, rarity: def?.rarity ?? 'Common' }
+    })
 
     res.json({
       data: {
@@ -135,6 +282,7 @@ router.get('/inventory', requireAuth, async (req: AuthRequest, res: Response): P
         canClaimToday,
         nameColor: user.nameColor,
         pfpEffect: user.pfpEffect,
+        ownedTags,
         ownedNameColors: parseJsonArr(user.ownedNameColors),
         ownedPfpEffects: parseJsonArr(user.ownedPfpEffects),
       },
@@ -264,13 +412,10 @@ router.post('/admin/grant', requireAuth, async (req: AuthRequest, res: Response)
       res.status(403).json({ error: 'DEV access required' }); return
     }
 
-    const { type, amount, itemId, itemType } = req.body as {
+    const { type, amount, itemId } = req.body as {
       type: 'coins' | 'name-color' | 'pfp' | 'tag'
       amount?: number
       itemId?: string
-      itemType?: string
-      tag?: string
-      tagColor?: string
     }
 
     if (type === 'coins') {
@@ -310,7 +455,7 @@ router.post('/admin/grant', requireAuth, async (req: AuthRequest, res: Response)
   }
 })
 
-// ── Catalog (for frontend to read loot tables) ────────────────────────────────
+// ── Catalog ────────────────────────────────────────────────────────────────────
 
 router.get('/catalog', (_req, res: Response) => {
   res.json({
@@ -321,6 +466,472 @@ router.get('/catalog', (_req, res: Response) => {
       boxCost: 10,
     },
   })
+})
+
+// ── Marketplace Listings ───────────────────────────────────────────────────────
+
+router.get('/listings', requireAuth, async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const listings = await prisma.marketplaceListing.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        seller: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+      },
+      orderBy: [{ price: 'desc' }, { itemRarityRank: 'desc' }],
+    })
+    res.json({ data: listings })
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch listings' })
+  }
+})
+
+router.post('/listings', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const { itemType, itemId, price } = req.body as { itemType?: string; itemId?: string; price?: number }
+
+  if (!itemType || !['tag', 'name-color', 'pfp'].includes(itemType)) {
+    res.status(400).json({ error: 'itemType must be tag, name-color, or pfp' }); return
+  }
+  if (!itemId || typeof itemId !== 'string') {
+    res.status(400).json({ error: 'itemId is required' }); return
+  }
+  if (typeof price !== 'number' || price < 10 || !Number.isInteger(price)) {
+    res.status(400).json({ error: 'price must be an integer >= 10' }); return
+  }
+
+  const listingFee = Math.floor(price * 0.1)
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { coins: true, allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+    })
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+    if (user.coins < listingFee) {
+      res.status(402).json({ error: `Not enough coins for listing fee (${listingFee} coins required)` }); return
+    }
+
+    // Resolve item metadata and verify ownership
+    let itemName = ''
+    let itemValue = ''
+    let itemRarity = ''
+    const tradeItem: TradeItem = { type: itemType as 'tag' | 'name-color' | 'pfp', id: itemId, rarity: '' }
+
+    if (itemType === 'tag') {
+      const def = TAG_BOX_ITEMS.find(t => t.id === itemId)
+      if (!def) { res.status(400).json({ error: 'Unknown tag item' }); return }
+      const ownedTags = parseTagArr(user.allTags)
+      if (!ownedTags.some(t => t.tag === def.tag)) {
+        res.status(403).json({ error: 'You do not own this tag' }); return
+      }
+      itemName = def.tag; itemValue = def.tagColor; itemRarity = def.rarity
+      tradeItem.tag = def.tag; tradeItem.tagColor = def.tagColor; tradeItem.rarity = def.rarity
+    } else if (itemType === 'name-color') {
+      const owned = parseJsonArr(user.ownedNameColors)
+      const def = owned.find(i => i.id === itemId) as { id: string; name: string; value: string; rarity: string } | undefined
+      if (!def) { res.status(403).json({ error: 'You do not own this name color' }); return }
+      const catalogDef = NAME_COLOR_BOX_ITEMS.find(c => c.id === itemId)
+      itemName = def.name; itemValue = def.value; itemRarity = def.rarity
+      tradeItem.name = def.name; tradeItem.value = def.value; tradeItem.rarity = def.rarity
+      if (!catalogDef) { res.status(400).json({ error: 'Unknown name color item' }); return }
+    } else {
+      const owned = parseJsonArr(user.ownedPfpEffects)
+      const def = owned.find(i => i.id === itemId) as { id: string; name: string; value: string; rarity: string } | undefined
+      if (!def) { res.status(403).json({ error: 'You do not own this pfp effect' }); return }
+      const catalogDef = PFP_EFFECT_BOX_ITEMS.find(c => c.id === itemId)
+      itemName = def.name; itemValue = def.value; itemRarity = def.rarity
+      tradeItem.name = def.name; tradeItem.value = def.value; tradeItem.rarity = def.rarity
+      if (!catalogDef) { res.status(400).json({ error: 'Unknown pfp effect item' }); return }
+    }
+
+    const inventoryUpdates = removeItem(user, tradeItem)
+
+    const listing = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: req.userId },
+        data: { coins: { decrement: listingFee }, ...inventoryUpdates },
+      })
+      return tx.marketplaceListing.create({
+        data: {
+          sellerId: req.userId!,
+          itemType,
+          itemId,
+          itemName,
+          itemValue,
+          itemRarity,
+          itemRarityRank: RARITY_RANK[itemRarity] ?? 0,
+          price,
+          status: 'ACTIVE',
+        },
+        include: { seller: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } } },
+      })
+    })
+
+    res.json({ data: { listing, listingFee } })
+  } catch {
+    res.status(500).json({ error: 'Failed to create listing' })
+  }
+})
+
+router.delete('/listings/:id', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const listingId = parseInt(req.params.id)
+  if (isNaN(listingId)) { res.status(400).json({ error: 'Invalid listing id' }); return }
+
+  try {
+    const listing = await prisma.marketplaceListing.findUnique({ where: { id: listingId } })
+    if (!listing) { res.status(404).json({ error: 'Listing not found' }); return }
+    if (listing.sellerId !== req.userId) { res.status(403).json({ error: 'Not your listing' }); return }
+    if (listing.status !== 'ACTIVE') { res.status(400).json({ error: 'Listing is not active' }); return }
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+    })
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+    const tradeItem: TradeItem = {
+      type: listing.itemType as 'tag' | 'name-color' | 'pfp',
+      id: listing.itemId,
+      rarity: listing.itemRarity,
+      name: listing.itemName,
+      value: listing.itemValue,
+      tag: listing.itemType === 'tag' ? listing.itemName : undefined,
+      tagColor: listing.itemType === 'tag' ? listing.itemValue : undefined,
+    }
+    const addUpdates = addItem(user, tradeItem)
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: req.userId }, data: addUpdates }),
+      prisma.marketplaceListing.update({ where: { id: listingId }, data: { status: 'CANCELLED' } }),
+    ])
+
+    res.json({ data: { ok: true } })
+  } catch {
+    res.status(500).json({ error: 'Failed to cancel listing' })
+  }
+})
+
+router.post('/listings/:id/buy', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const listingId = parseInt(req.params.id)
+  if (isNaN(listingId)) { res.status(400).json({ error: 'Invalid listing id' }); return }
+
+  try {
+    const listing = await prisma.marketplaceListing.findUnique({
+      where: { id: listingId },
+      include: { seller: { select: { id: true } } },
+    })
+    if (!listing) { res.status(404).json({ error: 'Listing not found' }); return }
+    if (listing.status !== 'ACTIVE') { res.status(400).json({ error: 'Listing is no longer available' }); return }
+    if (listing.sellerId === req.userId) { res.status(400).json({ error: 'Cannot buy your own listing' }); return }
+
+    const buyer = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { coins: true, allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+    })
+    if (!buyer) { res.status(404).json({ error: 'User not found' }); return }
+    if (buyer.coins < listing.price) {
+      res.status(402).json({ error: `Not enough coins (need ${listing.price})` }); return
+    }
+
+    const tradeItem: TradeItem = {
+      type: listing.itemType as 'tag' | 'name-color' | 'pfp',
+      id: listing.itemId,
+      rarity: listing.itemRarity,
+      name: listing.itemName,
+      value: listing.itemValue,
+      tag: listing.itemType === 'tag' ? listing.itemName : undefined,
+      tagColor: listing.itemType === 'tag' ? listing.itemValue : undefined,
+    }
+    const addUpdates = addItem(buyer, tradeItem)
+
+    const [updatedBuyer] = await prisma.$transaction([
+      prisma.user.update({ where: { id: req.userId }, data: { coins: { decrement: listing.price }, ...addUpdates } }),
+      prisma.user.update({ where: { id: listing.sellerId }, data: { coins: { increment: listing.price } } }),
+      prisma.marketplaceListing.update({ where: { id: listingId }, data: { status: 'SOLD', buyerId: req.userId } }),
+      prisma.notification.create({
+        data: {
+          userId: listing.sellerId,
+          fromUserId: req.userId,
+          type: 'LISTING_SOLD',
+          preview: `Your ${listing.itemName} sold for 🪙 ${listing.price}`,
+        },
+      }),
+    ])
+
+    res.json({ data: { ok: true, coins: updatedBuyer.coins } })
+  } catch {
+    res.status(500).json({ error: 'Failed to purchase listing' })
+  }
+})
+
+// ── User Public Inventory (for trading) ───────────────────────────────────────
+
+router.get('/users/:userId/inventory', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  const targetId = parseInt(req.params.userId)
+  if (isNaN(targetId)) { res.status(400).json({ error: 'Invalid userId' }); return }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, name: true, tag: true, tagColor: true, allTags: true, ownedNameColors: true, ownedPfpEffects: true },
+    })
+    if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+    const rawTags = parseTagArr(user.allTags)
+    const tags = rawTags.map(t => {
+      const def = TAG_BOX_ITEMS.find(d => d.tag === t.tag)
+      return { id: def?.id ?? t.tag, tag: t.tag, tagColor: t.tagColor, rarity: def?.rarity ?? 'Common' }
+    })
+
+    res.json({
+      data: {
+        user: { id: user.id, name: user.name, tag: user.tag, tagColor: user.tagColor },
+        tags,
+        nameColors: parseJsonArr(user.ownedNameColors),
+        pfpEffects: parseJsonArr(user.ownedPfpEffects),
+      },
+    })
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch user inventory' })
+  }
+})
+
+// ── Trades — order matters: static before dynamic ─────────────────────────────
+
+router.get('/trades/incoming', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  try {
+    const trades = await prisma.tradeOffer.findMany({
+      where: { receiverId: req.userId, status: 'PENDING' },
+      include: {
+        sender: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+        receiver: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ data: trades })
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch incoming trades' })
+  }
+})
+
+router.get('/trades/sent', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  try {
+    const trades = await prisma.tradeOffer.findMany({
+      where: { senderId: req.userId },
+      include: {
+        sender: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+        receiver: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    res.json({ data: trades })
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch sent trades' })
+  }
+})
+
+router.post('/trades', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const { receiverId, senderItems, receiverItems } = req.body as {
+    receiverId?: number
+    senderItems?: TradeItem[]
+    receiverItems?: TradeItem[]
+  }
+
+  if (!receiverId || typeof receiverId !== 'number') { res.status(400).json({ error: 'receiverId required' }); return }
+  if (receiverId === req.userId) { res.status(400).json({ error: 'Cannot trade with yourself' }); return }
+  if (!Array.isArray(senderItems) || senderItems.length === 0) { res.status(400).json({ error: 'senderItems must be a non-empty array' }); return }
+  if (!Array.isArray(receiverItems) || receiverItems.length === 0) { res.status(400).json({ error: 'receiverItems must be a non-empty array' }); return }
+
+  const TRADE_COST = 5
+  try {
+    const [sender, receiver] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { coins: true, allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+      }),
+      prisma.user.findUnique({ where: { id: receiverId }, select: { id: true } }),
+    ])
+
+    if (!sender) { res.status(404).json({ error: 'User not found' }); return }
+    if (!receiver) { res.status(404).json({ error: 'Trade partner not found' }); return }
+    if (sender.coins < TRADE_COST) { res.status(402).json({ error: 'Not enough coins (need 5 to send a trade)' }); return }
+
+    for (const item of senderItems) {
+      if (!userOwnsItem(sender, item)) {
+        res.status(403).json({ error: `You do not own: ${item.name ?? item.tag ?? item.id}` }); return
+      }
+    }
+
+    const removeUpdates = applyMultipleRemoves(sender, senderItems)
+
+    const trade = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: req.userId },
+        data: { coins: { decrement: TRADE_COST }, ...removeUpdates },
+      })
+      const created = await tx.tradeOffer.create({
+        data: {
+          senderId: req.userId!,
+          receiverId,
+          senderItems: JSON.stringify(senderItems),
+          receiverItems: JSON.stringify(receiverItems),
+          status: 'PENDING',
+        },
+        include: {
+          sender: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+          receiver: { select: { id: true, name: true, tag: true, tagColor: true, nameColor: true } },
+        },
+      })
+      await tx.notification.create({
+        data: {
+          userId: receiverId,
+          fromUserId: req.userId!,
+          type: 'TRADE_OFFER',
+          preview: `${sender} sent you a trade offer`,
+        },
+      })
+      return created
+    })
+
+    res.json({ data: trade })
+  } catch {
+    res.status(500).json({ error: 'Failed to create trade offer' })
+  }
+})
+
+router.post('/trades/:id/accept', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const tradeId = parseInt(req.params.id)
+  if (isNaN(tradeId)) { res.status(400).json({ error: 'Invalid trade id' }); return }
+
+  try {
+    const trade = await prisma.tradeOffer.findUnique({ where: { id: tradeId } })
+    if (!trade) { res.status(404).json({ error: 'Trade not found' }); return }
+    if (trade.receiverId !== req.userId) { res.status(403).json({ error: 'Not your trade to accept' }); return }
+    if (trade.status !== 'PENDING') { res.status(400).json({ error: 'Trade is no longer pending' }); return }
+
+    await prisma.$transaction(async (tx) => {
+      const [senderSnap, receiverSnap] = await Promise.all([
+        tx.user.findUnique({
+          where: { id: trade.senderId },
+          select: { allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+        }),
+        tx.user.findUnique({
+          where: { id: trade.receiverId },
+          select: { allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+        }),
+      ])
+      if (!senderSnap || !receiverSnap) throw new Error('User not found')
+
+      const senderItems = parseTradeItems(trade.senderItems)
+      const receiverItems = parseTradeItems(trade.receiverItems)
+
+      for (const item of receiverItems) {
+        if (!userOwnsItem(receiverSnap, item)) {
+          throw new Error(`You no longer own: ${item.name ?? item.tag ?? item.id}`)
+        }
+      }
+
+      const receiverRemoveUpdates = applyMultipleRemoves(receiverSnap, receiverItems)
+      const receiverAddUpdates = applyMultipleAdds({ ...receiverSnap, ...receiverRemoveUpdates }, senderItems)
+
+      const senderAddUpdates = applyMultipleAdds(senderSnap, receiverItems)
+
+      await Promise.all([
+        tx.user.update({ where: { id: trade.senderId }, data: senderAddUpdates }),
+        tx.user.update({ where: { id: trade.receiverId }, data: { ...receiverRemoveUpdates, ...receiverAddUpdates } }),
+        tx.tradeOffer.update({ where: { id: tradeId }, data: { status: 'ACCEPTED' } }),
+        tx.notification.create({
+          data: {
+            userId: trade.senderId,
+            fromUserId: req.userId!,
+            type: 'TRADE_ACCEPTED',
+            preview: 'Your trade offer was accepted',
+          },
+        }),
+      ])
+    })
+
+    res.json({ data: { ok: true } })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Failed to accept trade'
+    res.status(400).json({ error: msg })
+  }
+})
+
+router.post('/trades/:id/decline', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const tradeId = parseInt(req.params.id)
+  if (isNaN(tradeId)) { res.status(400).json({ error: 'Invalid trade id' }); return }
+
+  try {
+    const trade = await prisma.tradeOffer.findUnique({ where: { id: tradeId } })
+    if (!trade) { res.status(404).json({ error: 'Trade not found' }); return }
+    if (trade.receiverId !== req.userId) { res.status(403).json({ error: 'Not your trade to decline' }); return }
+    if (trade.status !== 'PENDING') { res.status(400).json({ error: 'Trade is no longer pending' }); return }
+
+    const sender = await prisma.user.findUnique({
+      where: { id: trade.senderId },
+      select: { allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+    })
+    if (!sender) { res.status(404).json({ error: 'Sender not found' }); return }
+
+    const senderItems = parseTradeItems(trade.senderItems)
+    const addUpdates = applyMultipleAdds(sender, senderItems)
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: trade.senderId }, data: addUpdates }),
+      prisma.tradeOffer.update({ where: { id: tradeId }, data: { status: 'DECLINED' } }),
+      prisma.notification.create({
+        data: {
+          userId: trade.senderId,
+          fromUserId: req.userId!,
+          type: 'TRADE_DECLINED',
+          preview: 'Your trade offer was declined — items returned',
+        },
+      }),
+    ])
+
+    res.json({ data: { ok: true } })
+  } catch {
+    res.status(500).json({ error: 'Failed to decline trade' })
+  }
+})
+
+router.post('/trades/:id/cancel', requireAuth, async (req: AuthRequest, res: Response): Promise<void> => {
+  if (!req.userId) { res.status(401).json({ error: 'Unauthorized' }); return }
+  const tradeId = parseInt(req.params.id)
+  if (isNaN(tradeId)) { res.status(400).json({ error: 'Invalid trade id' }); return }
+
+  try {
+    const trade = await prisma.tradeOffer.findUnique({ where: { id: tradeId } })
+    if (!trade) { res.status(404).json({ error: 'Trade not found' }); return }
+    if (trade.senderId !== req.userId) { res.status(403).json({ error: 'Not your trade to cancel' }); return }
+    if (trade.status !== 'PENDING') { res.status(400).json({ error: 'Trade is no longer pending' }); return }
+
+    const sender = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { allTags: true, ownedNameColors: true, ownedPfpEffects: true, tag: true, nameColor: true, pfpEffect: true },
+    })
+    if (!sender) { res.status(404).json({ error: 'User not found' }); return }
+
+    const senderItems = parseTradeItems(trade.senderItems)
+    const addUpdates = applyMultipleAdds(sender, senderItems)
+
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: req.userId }, data: addUpdates }),
+      prisma.tradeOffer.update({ where: { id: tradeId }, data: { status: 'CANCELLED' } }),
+    ])
+
+    res.json({ data: { ok: true } })
+  } catch {
+    res.status(500).json({ error: 'Failed to cancel trade' })
+  }
 })
 
 export default router

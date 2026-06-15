@@ -487,6 +487,45 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  marketplaceGetListings: () =>
+    request<MarketplaceListing[]>('/api/marketplace/listings'),
+
+  marketplaceCreateListing: (payload: { itemType: string; itemId: string; price: number }) =>
+    request<{ listing: MarketplaceListing; listingFee: number }>('/api/marketplace/listings', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  marketplaceCancelListing: (listingId: number) =>
+    request<{ ok: boolean }>(`/api/marketplace/listings/${listingId}`, { method: 'DELETE' }),
+
+  marketplaceBuyListing: (listingId: number) =>
+    request<{ ok: boolean; coins: number }>(`/api/marketplace/listings/${listingId}/buy`, { method: 'POST' }),
+
+  marketplaceGetUserInventory: (userId: number) =>
+    request<UserPublicInventory>(`/api/marketplace/users/${userId}/inventory`),
+
+  marketplaceCreateTrade: (payload: { receiverId: number; senderItems: TradeItem[]; receiverItems: TradeItem[] }) =>
+    request<TradeOffer>('/api/marketplace/trades', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  marketplaceGetIncomingTrades: () =>
+    request<TradeOffer[]>('/api/marketplace/trades/incoming'),
+
+  marketplaceGetSentTrades: () =>
+    request<TradeOffer[]>('/api/marketplace/trades/sent'),
+
+  marketplaceAcceptTrade: (tradeId: number) =>
+    request<{ ok: boolean }>(`/api/marketplace/trades/${tradeId}/accept`, { method: 'POST' }),
+
+  marketplaceDeclineTrade: (tradeId: number) =>
+    request<{ ok: boolean }>(`/api/marketplace/trades/${tradeId}/decline`, { method: 'POST' }),
+
+  marketplaceCancelTrade: (tradeId: number) =>
+    request<{ ok: boolean }>(`/api/marketplace/trades/${tradeId}/cancel`, { method: 'POST' }),
+
   // ── Parent API ────────────────────────────────────────────────────────────────
 
   parentLinkStudent: (credentials: { districtUrl: string; username: string; password: string }) =>
@@ -592,11 +631,19 @@ export interface MarketplaceItem {
   weight: number
 }
 
+export interface TagInventoryItem {
+  id: string
+  tag: string
+  tagColor: string
+  rarity: string
+}
+
 export interface InventoryData {
   coins: number
   canClaimToday: boolean
   nameColor: string | null
   pfpEffect: string | null
+  ownedTags: TagInventoryItem[]
   ownedNameColors: MarketplaceItem[]
   ownedPfpEffects: MarketplaceItem[]
 }
@@ -605,6 +652,51 @@ export interface BoxResult {
   coins: number
   won: { id: string; name?: string; tag?: string; tagColor?: string; value?: string; rarity: string; type: string }
   alreadyHad: boolean
+}
+
+export interface TradeItem {
+  type: 'tag' | 'name-color' | 'pfp'
+  id: string
+  tag?: string
+  tagColor?: string
+  name?: string
+  value?: string
+  rarity: string
+}
+
+export interface MarketplaceListing {
+  id: number
+  sellerId: number
+  itemType: string
+  itemId: string
+  itemName: string
+  itemValue: string
+  itemRarity: string
+  itemRarityRank: number
+  price: number
+  status: string
+  buyerId: number | null
+  createdAt: string
+  seller: { id: number; name: string | null; tag: string | null; tagColor: string | null; nameColor: string | null }
+}
+
+export interface TradeOffer {
+  id: number
+  senderId: number
+  receiverId: number
+  senderItems: TradeItem[]
+  receiverItems: TradeItem[]
+  status: string
+  createdAt: string
+  sender: { id: number; name: string | null; tag: string | null; tagColor: string | null; nameColor: string | null }
+  receiver: { id: number; name: string | null; tag: string | null; tagColor: string | null; nameColor: string | null }
+}
+
+export interface UserPublicInventory {
+  user: { id: number; name: string | null; tag: string | null; tagColor: string | null }
+  tags: TagInventoryItem[]
+  nameColors: MarketplaceItem[]
+  pfpEffects: MarketplaceItem[]
 }
 
 // ── Parent API ─────────────────────────────────────────────────────────────────
