@@ -91,7 +91,7 @@ router.post('/daily-coins', requireAuth, async (req: AuthRequest, res: Response)
   try {
     const { streak } = req.body as { streak?: number }
     const streakDay = typeof streak === 'number' && streak >= 1 ? streak : 1
-    const coinBonus = 50 + (streakDay - 1) * 10
+    const coinBonus = 30 + (streakDay - 1) * 5
 
     const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { coins: true, lastCoinClaim: true } })
     if (!user) { res.status(404).json({ error: 'User not found' }); return }

@@ -15,7 +15,7 @@ const STREAK_MILESTONES = [
 ]
 
 function streakCoinBonus(streak: number) {
-  return 50 + Math.max(0, streak - 1) * 10
+  return 30 + Math.max(0, streak - 1) * 5
 }
 
 function getNextMilestone(streak: number) {
@@ -289,10 +289,10 @@ export default function DashboardPage() {
               {dayStreak} Day Streak!
             </h3>
             <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#EAB308', fontWeight: 600, textAlign: 'center' as const }}>
-              🪙 +{streakCoinBonus(dayStreak)} coins today · +10 more each extra day
+              🪙 +{streakCoinBonus(dayStreak)} coins today · +5 more each extra day
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
-              Start at +50 coins on day 1, and earn +10 more for every consecutive day. Log in every day to unlock exclusive tags too!
+              Start at +30 coins on day 1, and earn +5 more for every consecutive day. Log in every day to unlock exclusive tags too!
             </p>
 
             {newlyAwardedTags.length > 0 && (
