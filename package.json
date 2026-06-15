@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "concurrently \"next dev\" \"cd backend && npm run dev\"",
-    "build": "next build && cd backend && npm run build",
+    "build": "next build",
     "start": "next start & cd backend && npm start"
   },
   "dependencies": {
