@@ -2,7 +2,7 @@
 
 AI-powered academic companion for high school students.
 
-## Quick Start
+## Quick Startt
 
 ### Prerequisites
 - Node.js 18+
